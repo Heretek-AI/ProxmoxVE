@@ -1,4 +1,4 @@
-import { MessagesSquare, Scroll } from "lucide-react";
+import { MessagesSquare, Scroll, FolderOpen, FileCode } from "lucide-react";
 import { FaDiscord, FaGithub } from "react-icons/fa";
 import React from "react";
 
@@ -9,30 +9,45 @@ export const basePath = process.env.BASE_PATH || "ProxmoxVE";
 
 export const navbarLinks = [
   {
-    href: `https://github.com/community-scripts/${basePath}`,
+    href: "/scripts",
+    event: "Scripts",
+    icon: <FileCode className="h-4 w-4" />,
+    text: "Scripts",
+  },
+  {
+    href: "/categories",
+    event: "Categories",
+    icon: <FolderOpen className="h-4 w-4" />,
+    text: "Categories",
+  },
+  {
+    href: "/community",
+    event: "Community",
+    icon: <MessagesSquare className="h-4 w-4" />,
+    text: "Community",
+    mobileHidden: true,
+  },
+  {
+    href: `https://github.com/Heretek-AI/${basePath}`,
     event: "GitHub",
     icon: <FaGithub className="h-4 w-4" />,
     text: "GitHub",
+    external: true,
   },
   {
     href: `https://discord.gg/3AnUqsXnmK`,
     event: "Discord",
     icon: <FaDiscord className="h-4 w-4" />,
     text: "Discord",
+    external: true,
   },
   {
-    href: `https://github.com/community-scripts/${basePath}/blob/main/CHANGELOG.md`,
+    href: `https://github.com/Heretek-AI/${basePath}/blob/main/CHANGELOG.md`,
     event: "Changelog",
     icon: <Scroll className="h-4 w-4" />,
     text: "Changelog",
     mobileHidden: true,
-  },
-  {
-    href: `https://github.com/community-scripts/${basePath}/discussions`,
-    event: "Discussions",
-    icon: <MessagesSquare className="h-4 w-4" />,
-    text: "Discussions",
-    mobileHidden: true,
+    external: true,
   },
 ].filter(Boolean) as {
   href: string;
@@ -40,18 +55,22 @@ export const navbarLinks = [
   icon: React.ReactNode;
   text: string;
   mobileHidden?: boolean;
+  external?: boolean;
 }[];
 
 export const mostPopularScripts = ["post-pve-install", "docker", "homeassistant"];
 
 export const analytics = {
-  url: "analytics.community-scripts.org",
-  token: "e9f14e1e7232",
+  url: "analytics.bramsuurd.nl",
+  token: "f9eee289f931",
 };
 
+// Heretek Alert Colors - Rust & Corruption themed
 export const AlertColors = {
-  warning: "border-red-500/25 bg-destructive/25",
-  info: "border-cyan-500/25 bg-cyan-50 dark:border-cyan-900 dark:bg-cyan-900/25",
+  warning: "border-rust-500/25 bg-destructive/25",
+  info: "border-corruption-400/25 bg-corruption-900/25",
+  success: "border-corruption-500/25 bg-corruption-800/25",
+  danger: "border-rust-600/25 bg-rust-900/25",
 };
 
 export const OperatingSystems: OperatingSystem[] = [

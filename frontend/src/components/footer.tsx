@@ -1,4 +1,4 @@
-import { FileJson, Server } from "lucide-react";
+import { FileJson, Server, FolderOpen, MessageCircle } from "lucide-react";
 import Link from "next/link";
 
 import { basePath } from "@/config/site-config";
@@ -15,7 +15,7 @@ export default function Footer() {
             Website built by the community. The source code is available on
             {" "}
             <Link
-              href={`https://github.com/community-scripts/${basePath}/tree/main/frontend`}
+              href={`https://github.com/Heretek-AI/${basePath}/tree/main/frontend`}
               target="_blank"
               rel="noreferrer"
               className="font-semibold underline-offset-2 duration-300 hover:underline"
@@ -26,13 +26,33 @@ export default function Footer() {
             .
           </p>
         </div>
-        <div className="sm:flex hidden">
+        <div className="sm:flex hidden gap-2">
+          <Link
+            href="/scripts"
+            className={cn(buttonVariants({ variant: "link" }), "text-muted-foreground flex items-center gap-2")}
+          >
+            <FileJson className="h-4 w-4" />
+            Scripts
+          </Link>
+          <Link
+            href="/categories"
+            className={cn(buttonVariants({ variant: "link" }), "text-muted-foreground flex items-center gap-2")}
+          >
+            <FolderOpen className="h-4 w-4" />
+            Categories
+          </Link>
+          <Link
+            href="/community"
+            className={cn(buttonVariants({ variant: "link" }), "text-muted-foreground flex items-center gap-2")}
+          >
+            <MessageCircle className="h-4 w-4" />
+            Community
+          </Link>
           <Link
             href="/json-editor"
             className={cn(buttonVariants({ variant: "link" }), "text-muted-foreground flex items-center gap-2")}
           >
             <FileJson className="h-4 w-4" />
-            {" "}
             JSON Editor
           </Link>
           <Link
@@ -40,7 +60,6 @@ export default function Footer() {
             className={cn(buttonVariants({ variant: "link" }), "text-muted-foreground flex items-center gap-2")}
           >
             <Server className="h-4 w-4" />
-            {" "}
             API Data
           </Link>
         </div>

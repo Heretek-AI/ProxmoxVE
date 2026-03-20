@@ -21,20 +21,42 @@ msg_ok "Installed Dependencies"
 fetch_and_deploy_gh_release "yao" "YaoApp/yao" "singlefile" "latest" "/usr/local/bin" "yao-*-linux-*"
 
 msg_info "Creating Application Directory"
-if [[ -e /root/.yao && ! -d /root/.yao ]]; then
-  msg_info "/root/.yao exists and is not a directory!"
-  msg_info "Removing File"
-  rm -f /root/.yao
-fi
-mkdir -p /root/.yao/bin
+mkdir -p /opt/yao/data
+mkdir -p /opt/yao/etc
 msg_ok "Created Application Directory"
 
 msg_info "Creating Environment File"
-cat <<EOF >/root/.yao/bin/.env
+cat <<EOF >/opt/yao/.env
 YAO_PORT=5099
 YAO_STUDIO_PORT=5077
 EOF
 msg_ok "Created Environment File"
+
+msg_info "Creating Minimal Application Configuration"
+cat <<EOF >/opt/yao/app.yao
+{
+  "name": "yao-app",
+  "version": "1.0.0",
+  "description": "Yao Autonomous Agent Engine",
+  "studio": {
+    "port": 5077
+  },
+  "server": {
+    "port": 5099,
+    "host": "0.0.0.0"
+  },
+  "database": {
+    "driver": "sqlite3",
+    "file": "/opt/yao/data/yao.db"
+  },
+  "session": {
+    "store": "file",
+    "path": "/opt/yao/data/sessions"
+  }
+}
+EOF
+mkdir -p /opt/yao/data/sessions
+msg_ok "Created Minimal Application Configuration"
 
 msg_info "Creating Service"
 cat <<EOF >/etc/systemd/system/yao.service
@@ -46,11 +68,11 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/.yao/bin
+WorkingDirectory=/opt/yao
 ExecStart=/usr/local/bin/yao start
 Restart=on-failure
 RestartSec=5
-EnvironmentFile=/root/.yao/bin/.env
+EnvironmentFile=/opt/yao/.env
 
 [Install]
 WantedBy=multi-user.target

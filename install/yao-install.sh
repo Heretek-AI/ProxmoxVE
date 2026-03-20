@@ -22,6 +22,8 @@ fetch_and_deploy_gh_release "yao" "YaoApp/yao" "singlefile" "latest" "/usr/local
 
 msg_info "Creating Application Directory"
 if [[ -e /root/.yao && ! -d /root/.yao ]]; then
+  msg_info "/root/.yao exists and is not a directory!"
+  msg_info "Removing File"
   rm -f /root/.yao
 fi
 mkdir -p /root/.yao/bin

@@ -29,11 +29,6 @@ fi
 mkdir -p /root/.yao/bin
 msg_ok "Created Application Directory"
 
-msg_info "Initializing Yao Application"
-cd /root/.yao/bin
-$STD /usr/local/bin/yao start
-msg_ok "Initialized Yao Application"
-
 msg_info "Creating Service"
 cat <<EOF >/etc/systemd/system/yao.service
 [Unit]

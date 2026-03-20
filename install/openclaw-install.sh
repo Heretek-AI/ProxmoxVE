@@ -75,7 +75,7 @@ HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
 cat <<EOF >/home/openclaw/.openclaw/openclaw.json
 {
   "gateway": {
-    "bind": "0.0.0.0",
+    "bind": "lan",
     "port": 18789,
     "controlUi": {
       "allowedOrigins": [
@@ -156,7 +156,7 @@ User=openclaw
 Group=openclaw
 WorkingDirectory=/opt/openclaw
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/openclaw gateway --port 18789 --bind 0.0.0.0
+ExecStart=/usr/bin/openclaw gateway --port 18789 --bind lan
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

@@ -93,15 +93,33 @@ EOF
 chown openclaw:openclaw /home/openclaw/.openclaw/openclaw.json
 msg_ok "Created OpenClaw Configuration"
 
+msg_info "Creating Self-Signed Certificate for HTTPS"
+# Generate self-signed certificate with IP in SAN (Caddy's tls internal doesn't work with IPs)
+mkdir -p /etc/caddy/certs
+CONTAINER_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -1)
+HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
+
+# Generate self-signed certificate valid for 365 days
+openssl req -x509 -newkey rsa:4096 -keyout /etc/caddy/certs/openclaw.key \
+  -out /etc/caddy/certs/openclaw.crt \
+  -days 365 -nodes \
+  -subj "/CN=openclaw-local" \
+  -addext "subjectAltName=IP:127.0.0.1,IP:${CONTAINER_IP},DNS:localhost,DNS:${HOSTNAME_FQDN}" 2>/dev/null
+
+# Set proper permissions
+chmod 644 /etc/caddy/certs/openclaw.crt
+chmod 600 /etc/caddy/certs/openclaw.key
+chown caddy:caddy /etc/caddy/certs/openclaw.crt /etc/caddy/certs/openclaw.key
+msg_ok "Created Self-Signed Certificate"
+
 msg_info "Creating Caddy HTTPS Reverse Proxy"
-# Create Caddyfile for HTTPS reverse proxy
-# Caddy will automatically generate self-signed certificates for local IPs
+# Create Caddyfile for HTTPS reverse proxy with explicit certificate paths
 cat <<EOF >/etc/caddy/Caddyfile
 # OpenClaw HTTPS Reverse Proxy
 # Access via https://<container-ip>:18790
 
 :18790 {
-    tls internal
+    tls /etc/caddy/certs/openclaw.crt /etc/caddy/certs/openclaw.key
     
     # Caddy automatically handles WebSocket upgrades
     reverse_proxy localhost:18789 {

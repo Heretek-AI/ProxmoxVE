@@ -110,7 +110,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/openclaw
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/openclaw gateway --port 18789
+ExecStart=/usr/bin/openclaw gateway --port 18789 --bind lan
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

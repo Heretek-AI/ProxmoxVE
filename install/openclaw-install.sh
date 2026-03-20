@@ -230,17 +230,6 @@ msg_info "Starting Caddy HTTPS Proxy"
 systemctl restart caddy
 msg_ok "Started Caddy HTTPS Proxy"
 
-# Display access information
-echo ""
-echo -e "${GN}OpenClaw is now running with HTTPS!${CL}"
-echo -e "${INFO}${YW} HTTP Access (localhost only):${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://localhost:18789${CL}"
-echo -e "${INFO}${YW} HTTPS Access (secure, works from any machine):${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}https://${CONTAINER_IP}:18790${CL}"
-echo -e "${INFO}${YW} Note: Your browser will warn about self-signed certificate.${CL}"
-echo -e "${TAB}${YW}Click 'Advanced' -> 'Proceed to site' to continue.${CL}"
-echo ""
-
 motd_ssh
 customize
 cleanup_lxc

@@ -3269,8 +3269,9 @@ function fetch_and_deploy_gh_release() {
   # Wait for HTTPS connectivity to be ready before making API calls
   # This prevents "no response" errors during container startup when network
   # stack isn't fully initialized yet (DNS and ping work before HTTPS is ready)
-  if ! wait_for_https_readiness "https://api.github.com/rate_limit" 30; then
-    msg_error "HTTPS connectivity not available after 30 seconds"
+  # Use 60 second timeout for containers with slow network initialization
+  if ! wait_for_https_readiness "https://api.github.com/rate_limit" 60; then
+    msg_error "HTTPS connectivity not available after 60 seconds"
     msg_error "Check your network configuration and firewall rules"
     return 1
   fi

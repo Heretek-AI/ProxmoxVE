@@ -22,8 +22,19 @@ $STD apt-get install -y \
   python3-pip \
   python3-venv \
   git \
-  procps
+  procps \
+  debian-keyring \
+  debian-archive-keyring
 msg_ok "Installed Dependencies"
+
+# Install Caddy for HTTPS reverse proxy
+msg_info "Installing Caddy (HTTPS Reverse Proxy)"
+$STD apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' >/etc/apt/sources.list.d/caddy-stable.list
+$STD apt-get update
+$STD apt-get install -y caddy
+msg_ok "Installed Caddy"
 
 # Setup Node.js 22 (required by OpenClaw)
 NODE_VERSION="22" setup_nodejs
@@ -101,16 +112,21 @@ msg_ok "Created Directories"
 msg_info "Creating OpenClaw Configuration"
 # Get the container's IP address for allowedOrigins
 CONTAINER_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -1)
+# Get hostname for HTTPS origins
+HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
 cat <<EOF >/root/.openclaw/openclaw.json
 {
   "gateway": {
-    "bind": "lan",
+    "bind": "loopback",
     "port": 18789,
     "controlUi": {
       "allowedOrigins": [
         "http://localhost:18789",
         "http://127.0.0.1:18789",
-        "http://${CONTAINER_IP}:18789"
+        "https://localhost:18790",
+        "https://127.0.0.1:18790",
+        "https://${CONTAINER_IP}:18790",
+        "https://${HOSTNAME_FQDN}:18790"
       ]
     }
   }
@@ -118,7 +134,48 @@ cat <<EOF >/root/.openclaw/openclaw.json
 EOF
 msg_ok "Created OpenClaw Configuration"
 
-msg_info "Creating Service"
+msg_info "Creating Caddy HTTPS Reverse Proxy"
+# Create Caddyfile for HTTPS reverse proxy
+# Caddy will automatically generate self-signed certificates for local IPs
+cat <<EOF >/etc/caddy/Caddyfile
+# OpenClaw HTTPS Reverse Proxy
+# Access via https://<container-ip>:18790
+
+:18790 {
+    tls internal
+    
+    reverse_proxy localhost:18789 {
+        # WebSocket support
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        
+        # WebSocket upgrade headers
+        @websockets {
+            header Connection *Upgrade*
+            header Upgrade websocket
+        }
+        reverse_proxy @websockets localhost:18789
+    }
+    
+    # Log requests
+    log {
+        output file /var/log/caddy/openclaw.log
+        format console
+    }
+}
+EOF
+
+# Create log directory
+mkdir -p /var/log/caddy
+chown caddy:caddy /var/log/caddy
+
+# Enable Caddy
+systemctl enable -q caddy
+msg_ok "Created Caddy HTTPS Reverse Proxy"
+
+msg_info "Creating OpenClaw Service"
 cat <<EOF >/etc/systemd/system/openclaw.service
 [Unit]
 Description=OpenClaw Gateway - Personal AI Assistant
@@ -130,7 +187,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/openclaw
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/openclaw gateway --port 18789 --bind lan
+ExecStart=/usr/bin/openclaw gateway --port 18789 --bind loopback
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
@@ -141,7 +198,23 @@ SyslogIdentifier=openclaw
 WantedBy=multi-user.target
 EOF
 systemctl enable -q --now openclaw
-msg_ok "Created Service"
+msg_ok "Created OpenClaw Service"
+
+msg_info "Starting Caddy HTTPS Proxy"
+# Restart Caddy to apply configuration
+systemctl restart caddy
+msg_ok "Started Caddy HTTPS Proxy"
+
+# Display access information
+echo ""
+echo -e "${GN}OpenClaw is now running with HTTPS!${CL}"
+echo -e "${INFO}${YW} HTTP Access (localhost only):${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://localhost:18789${CL}"
+echo -e "${INFO}${YW} HTTPS Access (secure, works from any machine):${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}https://${CONTAINER_IP}:18790${CL}"
+echo -e "${INFO}${YW} Note: Your browser will warn about self-signed certificate.${CL}"
+echo -e "${TAB}${YW}Click 'Advanced' -> 'Proceed to site' to continue.${CL}"
+echo ""
 
 motd_ssh
 customize

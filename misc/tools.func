@@ -3074,34 +3074,49 @@ function fetch_and_deploy_codeberg_release() {
 #
 # Arguments:
 #   $1 - URL to test (default: https://api.github.com/rate_limit)
-#   $2 - Max wait time in seconds (default: 30)
+#   $2 - Max wait time in seconds (default: 60)
 #
 # Returns: 0 if HTTPS is ready, 1 if timeout
 # ------------------------------------------------------------------------------
 wait_for_https_readiness() {
   local test_url="${1:-https://api.github.com/rate_limit}"
-  local max_wait="${2:-30}"
+  local max_wait="${2:-60}"
   local waited=0
-  local interval=1
+  local interval=2
+  local success_count=0
+  local required_successes=3
 
   # Check if we're in a container (need longer warmup)
   if [[ -f /.dockerenv ]] || grep -q 'lxc\|docker\|container' /proc/1/cgroup 2>/dev/null; then
-    # Container detected - start with 2 second delay for network stack to stabilize
-    debug_log "Container detected, waiting 2s for network stack initialization"
-    sleep 2
+    # Container detected - start with 5 second delay for network stack to stabilize
+    msg_info "Container detected, waiting for network stack to stabilize..."
+    sleep 5
   fi
 
+  msg_info "Waiting for HTTPS connectivity..."
+
   while ((waited < max_wait)); do
-    if curl -fsSL --connect-timeout 2 --max-time 5 "$test_url" &>/dev/null; then
-      debug_log "HTTPS connectivity ready after ${waited}s"
-      return 0
+    if curl -fsSL --connect-timeout 3 --max-time 10 "$test_url" &>/dev/null; then
+      ((success_count++))
+      msg_ok "HTTPS check ${success_count}/${required_successes} passed"
+      if ((success_count >= required_successes)); then
+        msg_ok "HTTPS connectivity verified after ${waited}s"
+        # Additional stabilization delay after successful checks
+        sleep 2
+        return 0
+      fi
+      # Wait between successful checks to ensure stability
+      sleep 2
+      ((waited += 2))
+    else
+      success_count=0
+      msg_warn "HTTPS check failed, retrying... (${waited}s/${max_wait}s)"
     fi
-    debug_log "Waiting for HTTPS connectivity... (${waited}s/${max_wait}s)"
     sleep $interval
     ((waited += interval))
   done
 
-  debug_log "HTTPS connectivity NOT ready after ${max_wait}s timeout"
+  msg_error "HTTPS connectivity NOT ready after ${max_wait}s timeout"
   return 1
 }
 

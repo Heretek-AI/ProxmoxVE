@@ -380,8 +380,245 @@ brew install <package-name>
 
 **Note:** Homebrew packages are installed to `/home/linuxbrew/.linuxbrew/` and are available to all users on the system.
 
-## Additional Resources
+## Memory Configuration with Ollama
+
+OpenClaw's memory search requires an embedding provider to index and search through your memory files. Ollama is an excellent choice for local, offline operation.
+
+### Prerequisites
+
+1. **Install Ollama** on your Proxmox host or a separate server:
+
+   ```bash
+   # On the OpenClaw container or a separate server
+   curl -fsSL https://ollama.com/install.sh | sh
+   ```
+
+2. **Pull an embedding model**. Recommended models for embeddings:
+
+   ```bash
+   # nomic-embed-text (recommended - good balance of quality and speed)
+   ollama pull nomic-embed-text
+
+   # Alternative: mxbai-embed-large (larger, more accurate)
+   ollama pull mxbai-embed-large
+
+   # Alternative: all-minilm (smaller, faster)
+   ollama pull all-minilm
+   ```
+
+### Configure OpenClaw for Ollama
+
+#### Option 1: Edit Configuration File
+
+```bash
+# Edit as the openclaw user
+su - openclaw
+nano ~/.openclaw/openclaw.json
+```
+
+Add the memory search configuration:
+
+```json
+{
+  "gateway": {
+    "bind": "lan",
+    "port": 18789,
+    "auth": {
+      "token": "your-token-here"
+    },
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "https://localhost:18790",
+        "https://127.0.0.1:18790"
+      ]
+    }
+  },
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "remote": {
+          "baseUrl": "http://localhost:11434"
+        }
+      }
+    }
+  }
+}
+```
+
+#### Option 2: Use OpenClaw CLI
+
+```bash
+# Configure memory search provider
+openclaw configure --section agents.defaults.memorySearch
+
+# Set provider to ollama
+openclaw configure --set agents.defaults.memorySearch.provider=ollama
+openclaw configure --set agents.defaults.memorySearch.model=nomic-embed-text
+openclaw configure --set agents.defaults.memorySearch.remote.baseUrl=http://localhost:11434
+```
+
+### Ollama on a Separate Server
+
+If Ollama runs on a different server, update the `baseUrl`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "remote": {
+          "baseUrl": "http://192.168.1.100:11434"
+        }
+      }
+    }
+  }
+}
+```
+
+### Verify Memory Configuration
+
+Check memory status:
+
+```bash
+openclaw memory status --deep
+```
+
+Expected output with Ollama configured:
+
+```
+Memory Search (main)
+Provider: ollama
+Model: nomic-embed-text
+Sources: memory
+Indexed: X/Y files · Z chunks
+Store: ~/.openclaw/memory/main.sqlite
+Embeddings: ready
+```
+
+### Create Memory Files
+
+Memory files are Markdown files that OpenClaw indexes:
+
+```bash
+# Create memory directory
+mkdir -p ~/.openclaw/workspace/memory
+
+# Create your first memory file
+cat > ~/.openclaw/workspace/MEMORY.md << 'EOF'
+# Personal Memory
+
+## Preferences
+- I prefer concise responses
+- Use bullet points for lists
+
+## Projects
+- Home automation: running on Proxmox
+- Media server: Jellyfin on port 8096
+EOF
+
+# Create additional memory files
+cat > ~/.openclaw/workspace/memory/projects.md << 'EOF'
+# Project Details
+
+## Home Lab
+- Proxmox VE host: 192.168.1.10
+- OpenClaw container: 192.168.1.20
+- Storage: TrueNAS at 192.168.1.30
+EOF
+```
+
+### Reindex Memory
+
+Force a reindex after configuration changes:
+
+```bash
+openclaw memory reindex
+```
+
+### Troubleshooting Memory Issues
+
+#### "No API key found" Error
+
+This error appears when no embedding provider is configured. Solution:
+
+```bash
+# Configure Ollama as the embedding provider
+openclaw configure --set agents.defaults.memorySearch.provider=ollama
+openclaw configure --set agents.defaults.memorySearch.model=nomic-embed-text
+```
+
+#### "memory directory missing" Warning
+
+Create the memory workspace:
+
+```bash
+mkdir -p ~/.openclaw/workspace/memory
+```
+
+#### Ollama Connection Refused
+
+Ensure Ollama is running and accessible:
+
+```bash
+# Check Ollama status
+systemctl status ollama
+
+# Test Ollama API
+curl http://localhost:11434/api/tags
+
+# If running on a separate server, check firewall
+ufw allow 11434/tcp
+```
+
+#### Slow First Search
+
+The first search may be slow as OpenClaw indexes your memory files. Subsequent searches use cached embeddings.
+
+### Embedding Model Comparison
+
+| Model             | Size   | Quality | Speed   | Use Case                      |
+| ----------------- | ------ | ------- | ------- | ----------------------------- |
+| nomic-embed-text  | ~274MB | Good    | Fast    | General purpose (recommended) |
+| mxbai-embed-large | ~670MB | Better  | Medium  | Higher accuracy needed        |
+| all-minilm        | ~45MB  | Basic   | Fastest | Resource-constrained          |
+
+### Hybrid Search (BM25 + Vector)
+
+Enable hybrid search for better recall:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "remote": {
+          "baseUrl": "http://localhost:11434"
+        },
+        "query": {
+          "hybrid": {
+            "enabled": true,
+            "vectorWeight": 0.7,
+            "textWeight": 0.3
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Additional Resources
 
 - [OpenClaw Gateway Documentation](https://docs.openclaw.ai/gateway)
 - [OpenClaw Security Guide](https://docs.openclaw.ai/gateway/security)
 - [OpenClaw Troubleshooting](https://docs.openclaw.ai/gateway/troubleshooting)
+- [OpenClaw Memory Configuration Reference](https://docs.openclaw.ai/reference/memory-config)
+- [Ollama Documentation](https://ollama.com/docs)

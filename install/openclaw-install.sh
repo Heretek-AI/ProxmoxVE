@@ -73,6 +73,8 @@ mkdir -p /opt/openclaw
 mkdir -p /home/openclaw/.openclaw
 chown -R openclaw:openclaw /opt/openclaw
 chown -R openclaw:openclaw /home/openclaw/.openclaw
+# Security: Restrict state directory to owner only (fixes world-readable warning)
+chmod 700 /home/openclaw/.openclaw
 msg_ok "Created Directories"
 
 msg_info "Creating OpenClaw Configuration"
@@ -80,11 +82,16 @@ msg_info "Creating OpenClaw Configuration"
 CONTAINER_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -1)
 # Get hostname for HTTPS origins
 HOSTNAME_FQDN=$(hostname -f 2>/dev/null || hostname)
+# Generate a secure random auth token (32 bytes = 64 hex chars)
+AUTH_TOKEN=$(openssl rand -hex 32)
 cat <<EOF >/home/openclaw/.openclaw/openclaw.json
 {
   "gateway": {
     "bind": "lan",
     "port": 18789,
+    "auth": {
+      "token": "${AUTH_TOKEN}"
+    },
     "controlUi": {
       "allowedOrigins": [
         "http://localhost:18789",
@@ -99,6 +106,8 @@ cat <<EOF >/home/openclaw/.openclaw/openclaw.json
 }
 EOF
 chown openclaw:openclaw /home/openclaw/.openclaw/openclaw.json
+# Security: Restrict config file to owner only (fixes world-readable critical issue)
+chmod 600 /home/openclaw/.openclaw/openclaw.json
 msg_ok "Created OpenClaw Configuration"
 
 msg_info "Creating Self-Signed Certificate for HTTPS"
@@ -167,6 +176,36 @@ msg_info "Starting Caddy HTTPS Proxy"
 # Restart Caddy to apply configuration
 systemctl restart caddy
 msg_ok "Started Caddy HTTPS Proxy"
+
+# Display auth token for pairing
+echo ""
+echo "═══════════════════════════════════════════════════════════════════════════════"
+echo "  OpenClaw Auth Token (save this for pairing):"
+echo "  ${AUTH_TOKEN}"
+echo "═══════════════════════════════════════════════════════════════════════════════"
+echo ""
+echo "  Use this token when prompted for pairing at:"
+echo "  https://${CONTAINER_IP}:18790/chat?session=main"
+echo ""
+echo "═══════════════════════════════════════════════════════════════════════════════"
+echo "  Memory Search Configuration"
+echo "═══════════════════════════════════════════════════════════════════════════════"
+echo ""
+echo "  Memory search requires an embedding provider. Configure one of:"
+echo "  - Ollama (local): https://docs.openclaw.ai/reference/memory-config"
+echo "  - OpenAI, Gemini, Voyage, or Mistral (cloud)"
+echo ""
+echo "  To configure Ollama (recommended for offline use):"
+echo "    1. Ensure Ollama is running on this host or accessible remotely"
+echo "    2. Pull an embedding model: ollama pull nomic-embed-text"
+echo "    3. Edit config: nano ~/.openclaw/openclaw.json"
+echo ""
+echo "  Add to config under 'agents.defaults.memorySearch':"
+echo '    { "provider": "ollama", "model": "nomic-embed-text",'
+echo '      "remote": { "baseUrl": "http://YOUR_OLLAMA_HOST:11434" } }'
+echo ""
+echo "  See docs/guides/openclaw-configuration.md for detailed setup."
+echo ""
 
 motd_ssh
 customize

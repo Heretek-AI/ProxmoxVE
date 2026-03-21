@@ -65,6 +65,14 @@
     {
       "text": "Can work with local models via Ollama for offline operation",
       "type": "info"
+    },
+    {
+      "text": "Memory search requires embedding provider (Ollama, OpenAI, Gemini, Voyage, or local model)",
+      "type": "warning"
+    },
+    {
+      "text": "For Ollama embeddings: install Ollama, pull an embedding model (e.g., nomic-embed-text), and configure memorySearch.provider='ollama'",
+      "type": "info"
     }
   ]
 }

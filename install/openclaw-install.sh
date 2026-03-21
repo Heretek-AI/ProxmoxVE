@@ -91,8 +91,17 @@ rm -f /tmp/brew-install.sh
 
 # Add Homebrew to PATH for openclaw user
 if [[ -f /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  # Add to .bashrc for interactive shells
   echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"' >> /home/openclaw/.bashrc
+  # Add to .profile for login shells
+  echo '' >> /home/openclaw/.profile
+  echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> /home/openclaw/.profile
   msg_ok "Installed Homebrew"
+  
+  # Install GCC (recommended by Homebrew)
+  msg_info "Installing GCC via Homebrew"
+  /home/linuxbrew/.linuxbrew/bin/brew install gcc 2>/dev/null || true
+  msg_ok "Installed GCC"
 else
   msg_warn "Homebrew installation may have failed - check logs"
 fi

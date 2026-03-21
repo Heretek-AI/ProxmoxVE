@@ -233,6 +233,12 @@ msg_info "Creating System-Level Systemd Service (LXC Mode)"
 mkdir -p /var/tmp/openclaw-compile-cache
 chown openclaw:openclaw /var/tmp/openclaw-compile-cache
 
+# Create secure temp directory for OpenClaw (required for security checks)
+# OpenClaw requires a temp dir that is only accessible by the openclaw user
+mkdir -p /var/tmp/openclaw
+chown openclaw:openclaw /var/tmp/openclaw
+chmod 700 /var/tmp/openclaw
+
 # Create system-level service file
 cat <<EOF >/etc/systemd/system/openclaw-gateway.service
 [Unit]
@@ -249,6 +255,7 @@ WorkingDirectory=/home/openclaw/.openclaw
 Environment="PATH=/home/openclaw/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="OPENCLAW_CONFIG_PATH=/home/openclaw/.openclaw/openclaw.json"
 Environment="NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache"
+Environment="TMPDIR=/var/tmp/openclaw"
 Environment="OPENCLAW_NO_RESPAWN=1"
 # LXC container mode - skip systemd service management (D-Bus not available)
 Environment="OPENCLAW_SKIP_SERVICE_INSTALL=1"
@@ -260,7 +267,7 @@ RestartSec=10
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/openclaw/.openclaw /var/tmp/openclaw-compile-cache
+ReadWritePaths=/home/openclaw/.openclaw /var/tmp/openclaw-compile-cache /var/tmp/openclaw
 
 [Install]
 WantedBy=multi-user.target

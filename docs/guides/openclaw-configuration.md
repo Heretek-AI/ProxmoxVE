@@ -1,5 +1,322 @@
 # OpenClaw Configuration Guide
 
+## Quick Start
+
+After installation, OpenClaw requires a **model provider** to function. This is the most critical configuration step.
+
+### Essential Commands
+
+```bash
+# Switch to openclaw user
+su - openclaw
+
+# Verify installation
+openclaw --version
+openclaw doctor
+openclaw gateway status
+
+# View logs
+openclaw logs --follow
+```
+
+---
+
+## Model Provider Configuration (REQUIRED)
+
+OpenClaw requires a model provider to process messages. Choose one of the following options:
+
+### Option A: Ollama (Local, Free, Recommended for Offline)
+
+Ollama runs models locally on your hardware - no API costs, complete privacy.
+
+#### 1. Install Ollama
+
+```bash
+# On the OpenClaw container or a separate server
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+#### 2. Pull Required Models
+
+```bash
+# Chat model (choose one)
+ollama pull llama3.2          # Good balance (recommended)
+ollama pull llama3.1:8b       # Larger, more capable
+ollama pull mistral           # Alternative option
+ollama pull gemma2            # Google's model
+
+# Embedding model (required for memory search)
+ollama pull nomic-embed-text  # Recommended (274MB)
+ollama pull mxbai-embed-large # Higher quality (670MB)
+ollama pull all-minilm        # Smallest, fastest (45MB)
+```
+
+#### 3. Configure OpenClaw for Ollama
+
+```bash
+su - openclaw
+openclaw configure
+# Select "Ollama" when prompted for model provider
+# Enter Ollama URL (default: http://localhost:11434)
+```
+
+Or manually edit `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama:llama3.2"
+      },
+      "memorySearch": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "remote": {
+          "baseUrl": "http://localhost:11434"
+        }
+      }
+    }
+  }
+}
+```
+
+#### 4. Ollama on a Separate Server
+
+If Ollama runs on a different machine:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama:llama3.2"
+      },
+      "memorySearch": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "remote": {
+          "baseUrl": "http://192.168.1.100:11434"
+        }
+      }
+    }
+  }
+}
+```
+
+### Option B: OpenAI API
+
+```bash
+su - openclaw
+openclaw models auth add --provider openai
+# Enter your API key when prompted
+
+# Set as default model
+openclaw models set openai:gpt-4o
+```
+
+Manual configuration:
+
+```json
+{
+  "secrets": {
+    "providers": {
+      "openai-api": {
+        "source": "env",
+        "env": "OPENAI_API_KEY"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai:gpt-4o"
+      }
+    }
+  }
+}
+```
+
+### Option C: Anthropic Claude
+
+```bash
+su - openclaw
+openclaw models auth add --provider anthropic
+# Enter your API key when prompted
+
+# Set as default model
+openclaw models set anthropic:claude-opus-4-6
+```
+
+### Option D: Other Providers
+
+OpenClaw supports many providers:
+
+| Provider      | Command                                          |
+| ------------- | ------------------------------------------------ |
+| Google Gemini | `openclaw models auth add --provider google`     |
+| Mistral       | `openclaw models auth add --provider mistral`    |
+| OpenRouter    | `openclaw models auth add --provider openrouter` |
+| Groq          | `openclaw models auth add --provider groq`       |
+| xAI           | `openclaw models auth add --provider xai`        |
+| Together AI   | `openclaw models auth add --provider together`   |
+
+### Verify Model Configuration
+
+```bash
+# Check model status
+openclaw models status
+
+# Test with a message
+openclaw agent --message "Hello, are you working?" --local
+```
+
+---
+
+## Channel Configuration
+
+OpenClaw supports multiple messaging channels. Configure channels to interact through your preferred platform.
+
+### Supported Channels
+
+| Channel         | Type          | Setup Method                    |
+| --------------- | ------------- | ------------------------------- |
+| Telegram        | Bot API       | Bot token from @BotFather       |
+| Discord         | Bot API       | Bot token from Developer Portal |
+| WhatsApp        | Baileys       | QR code pairing                 |
+| Slack           | Bolt SDK      | App credentials                 |
+| Signal          | signal-cli    | Phone number pairing            |
+| Matrix          | Plugin        | Homeserver config               |
+| iMessage        | BlueBubbles   | macOS server required           |
+| Microsoft Teams | Bot Framework | App registration                |
+| IRC             | Native        | Server connection               |
+| Google Chat     | Webhook       | App configuration               |
+
+### Telegram Setup (Easiest)
+
+1. **Create a bot** by messaging [@BotFather](https://t.me/BotFather) on Telegram
+2. **Get your bot token** (format: `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
+3. **Configure OpenClaw**:
+
+```bash
+su - openclaw
+openclaw channels add --channel telegram --token "YOUR_BOT_TOKEN"
+```
+
+4. **Start messaging** your bot on Telegram
+
+### Discord Setup
+
+1. **Create a bot** at [Discord Developer Portal](https://discord.com/developers/applications)
+2. **Get your bot token** from the Bot section
+3. **Invite bot to server** using OAuth2 URL generator
+4. **Configure OpenClaw**:
+
+```bash
+su - openclaw
+openclaw channels add --channel discord --token "YOUR_BOT_TOKEN"
+```
+
+### WhatsApp Setup
+
+WhatsApp requires QR code pairing:
+
+```bash
+su - openclaw
+openclaw channels add --channel whatsapp
+# A QR code will be displayed
+# Scan with WhatsApp on your phone (Settings > Linked Devices)
+```
+
+### Multiple Accounts
+
+You can configure multiple accounts per channel:
+
+```bash
+# Add a second Telegram account
+openclaw channels add --channel telegram --account work --name "Work Bot" --token "WORK_BOT_TOKEN"
+
+# List all channels
+openclaw channels list
+
+# Check channel status
+openclaw channels status --probe
+```
+
+### Channel Routing
+
+Route different channels to different agents:
+
+```bash
+# Create an agent
+openclaw agents add --workspace ~/.openclaw-workspaces/work
+
+# Bind channels to agent
+openclaw agents bind --agent <agent-id> --bind telegram:work
+openclaw agents bind --agent <agent-id> --bind discord:main
+```
+
+---
+
+## Memory Configuration
+
+OpenClaw's memory search requires an embedding provider to index and search through your memory files.
+
+### Memory Files Location
+
+Memory files are stored in `~/.openclaw/workspace/memory/`:
+
+```bash
+# Create memory directory
+mkdir -p ~/.openclaw/workspace/memory
+
+# Create your first memory file
+cat > ~/.openclaw/workspace/MEMORY.md << 'EOF'
+# Personal Memory
+
+## Preferences
+- I prefer concise responses
+- Use bullet points for lists
+
+## Projects
+- Home automation: running on Proxmox
+- Media server: Jellyfin on port 8096
+EOF
+```
+
+### Configure Memory Search
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "provider": "ollama",
+        "model": "nomic-embed-text",
+        "remote": {
+          "baseUrl": "http://localhost:11434"
+        }
+      }
+    }
+  }
+}
+```
+
+### Memory Commands
+
+```bash
+# Check memory status
+openclaw memory status
+
+# Reindex memory files
+openclaw memory index
+
+# Search memory
+openclaw memory search "project details"
+```
+
+---
+
 ## "Device Identity Required" Error Fix
 
 If you see this error when accessing the Control UI from another machine:
@@ -43,7 +360,6 @@ nano ~/.openclaw/openclaw.json
       "allowInsecureAuth": true
     },
     "auth": {
-      "mode": "token",
       "token": "your-secure-token-here"
     }
   }
@@ -64,7 +380,7 @@ su - openclaw -c "systemctl --user restart openclaw-gateway"
 
 ### Solution 3: HTTPS Reverse Proxy (Production)
 
-Set up Caddy or Nginx with SSL certificates for secure HTTPS access.
+The installation includes Caddy for HTTPS access on port 18790.
 
 ### Solution 4: Tailscale VPN
 
@@ -85,6 +401,8 @@ For emergency access only, you can completely disable device auth:
 ```
 
 **⚠️ WARNING:** This is a severe security downgrade. Revert immediately after emergency use.
+
+---
 
 ## "Origin Not Allowed" Error Fix
 
@@ -123,6 +441,8 @@ su - openclaw -c "systemctl --user restart openclaw-gateway"
 ```
 
 **Note:** Even with `allowedOrigins` configured, you still need a secure context (HTTPS or localhost) for the device identity requirement. Use SSH tunneling for LAN access.
+
+---
 
 ## Network Binding Configuration
 
@@ -305,6 +625,7 @@ journalctl --user -u openclaw-gateway -f --user-unit
 # Common issues:
 # - Port already in use: lsof -i :18789
 # - Permission denied: ensure running as correct user
+# - Config errors: openclaw doctor
 ```
 
 ### Cannot Connect from Remote
@@ -316,11 +637,41 @@ journalctl --user -u openclaw-gateway -f --user-unit
 ### Token Authentication Issues
 
 ```bash
-# Regenerate token
-openclaw doctor --generate-gateway-token
-
 # View current token
 openclaw gateway status
+
+# Regenerate token (if needed)
+openclaw doctor --generate-gateway-token
+```
+
+### Model Provider Issues
+
+```bash
+# Check model status
+openclaw models status
+
+# Probe providers (may consume tokens)
+openclaw models status --probe
+
+# Set default model
+openclaw models set <provider:model>
+
+# Example:
+openclaw models set ollama:llama3.2
+openclaw models set openai:gpt-4o
+```
+
+### Channel Issues
+
+```bash
+# Check channel status
+openclaw channels status --probe
+
+# View channel logs
+openclaw channels logs --channel telegram
+
+# Re-login to a channel
+openclaw channels login --channel whatsapp
 ```
 
 ## Installing Homebrew (Optional)
@@ -380,207 +731,9 @@ brew install <package-name>
 
 **Note:** Homebrew packages are installed to `/home/linuxbrew/.linuxbrew/` and are available to all users on the system.
 
-## Memory Configuration with Ollama
+---
 
-OpenClaw's memory search requires an embedding provider to index and search through your memory files. Ollama is an excellent choice for local, offline operation.
-
-### Prerequisites
-
-1. **Install Ollama** on your Proxmox host or a separate server:
-
-   ```bash
-   # On the OpenClaw container or a separate server
-   curl -fsSL https://ollama.com/install.sh | sh
-   ```
-
-2. **Pull an embedding model**. Recommended models for embeddings:
-
-   ```bash
-   # nomic-embed-text (recommended - good balance of quality and speed)
-   ollama pull nomic-embed-text
-
-   # Alternative: mxbai-embed-large (larger, more accurate)
-   ollama pull mxbai-embed-large
-
-   # Alternative: all-minilm (smaller, faster)
-   ollama pull all-minilm
-   ```
-
-### Configure OpenClaw for Ollama
-
-#### Option 1: Edit Configuration File
-
-```bash
-# Edit as the openclaw user
-su - openclaw
-nano ~/.openclaw/openclaw.json
-```
-
-Add the memory search configuration:
-
-```json
-{
-  "gateway": {
-    "bind": "lan",
-    "port": 18789,
-    "auth": {
-      "token": "your-token-here"
-    },
-    "controlUi": {
-      "allowedOrigins": [
-        "http://localhost:18789",
-        "http://127.0.0.1:18789",
-        "https://localhost:18790",
-        "https://127.0.0.1:18790"
-      ]
-    }
-  },
-  "agents": {
-    "defaults": {
-      "memorySearch": {
-        "provider": "ollama",
-        "model": "nomic-embed-text",
-        "remote": {
-          "baseUrl": "http://localhost:11434"
-        }
-      }
-    }
-  }
-}
-```
-
-#### Option 2: Use OpenClaw CLI
-
-```bash
-# Configure memory search provider
-openclaw configure --section agents.defaults.memorySearch
-
-# Set provider to ollama
-openclaw configure --set agents.defaults.memorySearch.provider=ollama
-openclaw configure --set agents.defaults.memorySearch.model=nomic-embed-text
-openclaw configure --set agents.defaults.memorySearch.remote.baseUrl=http://localhost:11434
-```
-
-### Ollama on a Separate Server
-
-If Ollama runs on a different server, update the `baseUrl`:
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "memorySearch": {
-        "provider": "ollama",
-        "model": "nomic-embed-text",
-        "remote": {
-          "baseUrl": "http://192.168.1.100:11434"
-        }
-      }
-    }
-  }
-}
-```
-
-### Verify Memory Configuration
-
-Check memory status:
-
-```bash
-openclaw memory status --deep
-```
-
-Expected output with Ollama configured:
-
-```
-Memory Search (main)
-Provider: ollama
-Model: nomic-embed-text
-Sources: memory
-Indexed: X/Y files · Z chunks
-Store: ~/.openclaw/memory/main.sqlite
-Embeddings: ready
-```
-
-### Create Memory Files
-
-Memory files are Markdown files that OpenClaw indexes:
-
-```bash
-# Create memory directory
-mkdir -p ~/.openclaw/workspace/memory
-
-# Create your first memory file
-cat > ~/.openclaw/workspace/MEMORY.md << 'EOF'
-# Personal Memory
-
-## Preferences
-- I prefer concise responses
-- Use bullet points for lists
-
-## Projects
-- Home automation: running on Proxmox
-- Media server: Jellyfin on port 8096
-EOF
-
-# Create additional memory files
-cat > ~/.openclaw/workspace/memory/projects.md << 'EOF'
-# Project Details
-
-## Home Lab
-- Proxmox VE host: 192.168.1.10
-- OpenClaw container: 192.168.1.20
-- Storage: TrueNAS at 192.168.1.30
-EOF
-```
-
-### Reindex Memory
-
-Force a reindex after configuration changes:
-
-```bash
-openclaw memory reindex
-```
-
-### Troubleshooting Memory Issues
-
-#### "No API key found" Error
-
-This error appears when no embedding provider is configured. Solution:
-
-```bash
-# Configure Ollama as the embedding provider
-openclaw configure --set agents.defaults.memorySearch.provider=ollama
-openclaw configure --set agents.defaults.memorySearch.model=nomic-embed-text
-```
-
-#### "memory directory missing" Warning
-
-Create the memory workspace:
-
-```bash
-mkdir -p ~/.openclaw/workspace/memory
-```
-
-#### Ollama Connection Refused
-
-Ensure Ollama is running and accessible:
-
-```bash
-# Check Ollama status
-systemctl status ollama
-
-# Test Ollama API
-curl http://localhost:11434/api/tags
-
-# If running on a separate server, check firewall
-ufw allow 11434/tcp
-```
-
-#### Slow First Search
-
-The first search may be slow as OpenClaw indexes your memory files. Subsequent searches use cached embeddings.
-
-### Embedding Model Comparison
+## Embedding Model Comparison
 
 | Model             | Size   | Quality | Speed   | Use Case                      |
 | ----------------- | ------ | ------- | ------- | ----------------------------- |
@@ -588,7 +741,9 @@ The first search may be slow as OpenClaw indexes your memory files. Subsequent s
 | mxbai-embed-large | ~670MB | Better  | Medium  | Higher accuracy needed        |
 | all-minilm        | ~45MB  | Basic   | Fastest | Resource-constrained          |
 
-### Hybrid Search (BM25 + Vector)
+---
+
+## Hybrid Search (BM25 + Vector)
 
 Enable hybrid search for better recall:
 
@@ -615,10 +770,15 @@ Enable hybrid search for better recall:
 }
 ```
 
-### Additional Resources
+---
+
+## Additional Resources
 
 - [OpenClaw Gateway Documentation](https://docs.openclaw.ai/gateway)
 - [OpenClaw Security Guide](https://docs.openclaw.ai/gateway/security)
 - [OpenClaw Troubleshooting](https://docs.openclaw.ai/gateway/troubleshooting)
 - [OpenClaw Memory Configuration Reference](https://docs.openclaw.ai/reference/memory-config)
+- [OpenClaw CLI Reference](https://docs.openclaw.ai/cli)
+- [OpenClaw Channels](https://docs.openclaw.ai/channels)
+- [OpenClaw Model Providers](https://docs.openclaw.ai/providers)
 - [Ollama Documentation](https://ollama.com/docs)

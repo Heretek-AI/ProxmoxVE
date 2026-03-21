@@ -84,8 +84,9 @@ curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o
 
 # Run installer non-interactively as openclaw user
 # CI=1 and NONINTERACTIVE=1 enable fully automated installation
+# Pipe empty string to automatically confirm the "Press RETURN" prompt
 # Using sudo -u since openclaw user has nologin shell
-CI=1 NONINTERACTIVE=1 sudo -u openclaw bash /tmp/brew-install.sh || true
+echo "" | CI=1 NONINTERACTIVE=1 sudo -u openclaw bash /tmp/brew-install.sh || true
 rm -f /tmp/brew-install.sh
 
 # Add Homebrew to PATH for openclaw user

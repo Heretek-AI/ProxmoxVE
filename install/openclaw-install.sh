@@ -70,7 +70,8 @@ mkdir -p /home/openclaw/.npm-global
 chown -R openclaw:openclaw /home/openclaw/.npm-global
 # Set npm prefix for openclaw user to use home directory
 # Using sudo -u since openclaw user has nologin shell
-sudo -u openclaw npm config set prefix /home/openclaw/.npm-global
+# IMPORTANT: Run from openclaw's home directory to avoid permission errors
+cd /home/openclaw && sudo -u openclaw npm config set prefix /home/openclaw/.npm-global
 # Add to PATH for openclaw user
 echo 'export PATH=/home/openclaw/.npm-global/bin:$PATH' >> /home/openclaw/.bashrc
 msg_ok "Configured npm for User Packages"
@@ -88,7 +89,8 @@ curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o
 # CI=1 and NONINTERACTIVE=1 enable fully automated installation
 # Pipe empty string to automatically confirm the "Press RETURN" prompt
 # Using sudo -u since openclaw user has nologin shell
-echo "" | CI=1 NONINTERACTIVE=1 sudo -u openclaw bash /tmp/brew-install.sh || true
+# IMPORTANT: Run from openclaw's home directory to avoid permission errors
+cd /home/openclaw && echo "" | CI=1 NONINTERACTIVE=1 sudo -u openclaw bash /tmp/brew-install.sh || true
 rm -f /tmp/brew-install.sh
 
 # Add Homebrew to PATH for openclaw user
@@ -111,7 +113,8 @@ fi
 msg_info "Installing OpenClaw"
 # Install OpenClaw globally as the openclaw user
 # Using sudo -u since openclaw user has nologin shell
-sudo -u openclaw npm install -g openclaw@latest
+# IMPORTANT: Run from openclaw's home directory to avoid permission errors
+cd /home/openclaw && sudo -u openclaw npm install -g openclaw@latest
 msg_ok "Installed OpenClaw"
 
 msg_info "Creating Directories"
@@ -229,7 +232,9 @@ export OPENCLAW_CONFIG_PATH="/home/openclaw/.openclaw/openclaw.json"
 
 # Install the gateway service using the recommended method
 # Using sudo -u since openclaw user has nologin shell
-sudo -u openclaw env PATH="/home/openclaw/.npm-global/bin:$PATH" openclaw gateway install 2>/dev/null || true
+# IMPORTANT: Run from openclaw's home directory to avoid permission errors
+# This is required for brew and other tools that check directory permissions
+cd /home/openclaw && sudo -u openclaw env PATH="/home/openclaw/.npm-global/bin:$PATH" openclaw gateway install 2>/dev/null || true
 
 # If the service wasn't created, create it manually
 if [[ ! -f /home/openclaw/.config/systemd/user/openclaw-gateway.service ]]; then
@@ -266,8 +271,9 @@ msg_ok "Started Caddy HTTPS Proxy"
 msg_info "Starting OpenClaw Gateway"
 # Start the gateway service as the openclaw user
 # Using sudo -u since openclaw user has nologin shell
-sudo -u openclaw systemctl --user enable openclaw-gateway 2>/dev/null || true
-sudo -u openclaw systemctl --user start openclaw-gateway 2>/dev/null || true
+# IMPORTANT: Run from openclaw's home directory to avoid permission errors
+cd /home/openclaw && sudo -u openclaw systemctl --user enable openclaw-gateway 2>/dev/null || true
+cd /home/openclaw && sudo -u openclaw systemctl --user start openclaw-gateway 2>/dev/null || true
 msg_ok "Started OpenClaw Gateway"
 
 # Wait for gateway to be ready
@@ -275,7 +281,8 @@ msg_info "Verifying Installation"
 sleep 5
 
 # Check if gateway is running
-if sudo -u openclaw systemctl --user is-active openclaw-gateway 2>/dev/null | grep -q "active"; then
+# IMPORTANT: Run from openclaw's home directory to avoid permission errors
+cd /home/openclaw && if sudo -u openclaw systemctl --user is-active openclaw-gateway 2>/dev/null | grep -q "active"; then
   msg_ok "Gateway Service is Active"
 else
   msg_warn "Gateway Service may not be running - check logs with: sudo -u openclaw journalctl --user -u openclaw-gateway"

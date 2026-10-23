@@ -79,8 +79,6 @@ These scripts are exclusive to this forge, focusing on AI/ML workloads and speci
 | Script | Description | Resources |
 |--------|-------------|-----------|
 | **[MCPHub](https://github.com/samanhappy/mcphub)** | Model Context Protocol Hub for AI tooling integration | 2 CPU / 2GB RAM |
-| **[Hermes](https://github.com/NousResearch/hermes-agent)** | Nous Research Hermes AI Agent | 8 CPU / 16GB RAM |
-| **[Lemonade](https://lemonade-server.ai)** | Local AI inference server with GPU support | 2 CPU / 4GB RAM + GPU |
 | **[SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI)** | Stable Diffusion Swarm interface | 8 CPU / 16GB RAM + GPU |
 | **[LlamaCPP](https://github.com/ggml-org/llama.cpp)** | High-performance LLM inference engine with GPU acceleration | 4 CPU / 8GB RAM + GPU |
 | **[OpenClaw](https://github.com/openclaw/openclaw)** | AI-powered assistant and automation platform | 2 CPU / 4GB RAM |
@@ -91,14 +89,6 @@ These scripts are exclusive to this forge, focusing on AI/ML workloads and speci
 |--------|-------------|-----------|
 | **[Agregarr](https://github.com/agregarr/agregarr)** | Media aggregation and streaming | 2 CPU / 4GB RAM |
 | **[Drop](https://github.com/Drop-OSS/drop)** | Gaming and media server | 2 CPU / 4GB RAM |
-| **[Maintainerr](https://github.com/Maintainerr/Maintainerr)** | Media library management for Plex/Jellyfin/Emby | 2 CPU / 4GB RAM |
-
-### Productivity & Tools
-
-| Script | Description | Resources |
-|--------|-------------|-----------|
-| **[Wakapi](https://github.com/muety/wakapi)** | Self-hosted coding time tracking and analytics | 2 CPU / 2GB RAM |
-| **[PegaProx](https://pegaprox.com)** | Proxmox cluster management and monitoring | 2 CPU / 2GB RAM |
 
 ---
 
@@ -224,7 +214,7 @@ Choose your preferred installation method:
 The fastest way to get started:
 
 1. Visit **[helpful-scripts.com](https://helpful-scripts.com/)** 🌐
-2. Search for your desired script (e.g., "MCPHub", "Hermes", "Lemonade")
+2. Search for your desired script (e.g., "MCPHub", "SwarmUI", "LlamaCPP")
 3. Copy the bash command displayed on the script page
 4. Open your **Proxmox Shell** and paste the command
 5. Press Enter and follow the interactive prompts

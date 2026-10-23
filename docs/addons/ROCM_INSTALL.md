@@ -479,7 +479,7 @@ apt install -y rocm-dev
 
 - **llama.cpp Server** - Uses ROCm for GPU-accelerated LLM inference
 - **SwarmUI** - Uses ROCm for Stable Diffusion image generation
-- **Lemonade** - Uses ROCm for local LLM inference
+- **Lemonade-Server** (upstream community-scripts) - Uses ROCm for local LLM inference
 
 ---
 

@@ -37,8 +37,8 @@ for it instead:
 
 ## Adding a script
 
-1. Copy an existing Heretek pair, such as `ct/wakapi.sh` and
-   `install/wakapi-install.sh`.
+1. Copy an existing Heretek pair, such as `ct/ztnet.sh` and
+   `install/ztnet-install.sh`.
 2. Keep the first three lines of the ct script as they are. The first sets
    `COMMUNITY_SCRIPTS_URL` to this repository, so install scripts and
    `/usr/bin/update` come from here. The next two load the engine from

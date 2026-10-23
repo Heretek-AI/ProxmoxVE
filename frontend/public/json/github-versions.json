@@ -9,13 +9,6 @@
       "date": "2026-03-17T08:57:42Z"
     },
     {
-      "slug": "lemonade",
-      "repo": "lemonade-sdk/lemonade",
-      "version": "v10.0.0",
-      "pinned": false,
-      "date": "2026-03-11T15:41:09Z"
-    },
-    {
       "slug": "llamacpp",
       "repo": "ggml-org/llama.cpp",
       "version": "b8457",
@@ -63,13 +56,6 @@
       "version": "v0.0.4",
       "pinned": false,
       "date": "2026-01-28T10:30:17Z"
-    },
-    {
-      "slug": "wakapi",
-      "repo": "muety/wakapi",
-      "version": "2.17.2",
-      "pinned": false,
-      "date": "2026-03-01T08:35:49Z"
     }
   ]
 }

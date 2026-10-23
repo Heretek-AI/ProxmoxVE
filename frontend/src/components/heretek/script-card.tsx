@@ -66,7 +66,7 @@ export function ScriptCard({ script, className }: { script: CatalogScript; class
           </div>
           <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
             {script.categoryNames[0] ?? "Uncategorised"}
-            {os && <span>{` · ${os}`}</span>}
+            {os != null && <span>{` · ${os}`}</span>}
           </p>
         </div>
       </div>

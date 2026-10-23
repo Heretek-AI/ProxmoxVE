@@ -80,7 +80,7 @@ function ReleaseItem({ release, latest, installed }: { release: Release; latest:
         {release.prerelease && <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-brass">Pre-release</span>}
         <span className="font-mono text-[11px] text-muted-foreground">{formatDate(release.published_at)}</span>
       </div>
-      {body && (
+      {body.length > 0 && (
         <>
           <pre className={`mt-2 whitespace-pre-wrap break-words font-sans text-[13px] leading-relaxed text-muted-foreground ${open ? "" : "line-clamp-3"}`}>{body}</pre>
           {body.length > 200 && (

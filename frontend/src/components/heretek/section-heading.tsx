@@ -20,7 +20,7 @@ export function SectionHeading({
     <div id={id} className={cn("mb-6 flex items-end justify-between gap-4 border-b border-border pb-3", className)}>
       <div>
         <p className="label-mono mb-2">
-          {index && <span className="mr-2 text-blood">{index}</span>}
+          {Boolean(index) && <span className="mr-2 text-blood">{index}</span>}
           {kicker}
         </p>
         <h2 className="font-display text-2xl font-semibold tracking-tight md:text-[28px]">{title}</h2>

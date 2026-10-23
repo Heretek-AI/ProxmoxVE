@@ -83,7 +83,7 @@ export function ScriptView({ script, categories, related = [] }: { script: Catal
                 <TypeTag type={script.type} long />
                 {script.updateable && <Tag className="border-verdigris/40 text-verdigris">Updateable</Tag>}
                 <Tag>{script.privileged ? "Privileged" : "Unprivileged"}</Tag>
-                {os && <Tag>{os}</Tag>}
+                {os != null && <Tag>{os}</Tag>}
                 {!script.available && <Tag className="border-blood/50 text-blood">Script missing</Tag>}
                 {script.categories.map((id) => {
                   const c = categories.find(x => x.id === id);
@@ -97,10 +97,10 @@ export function ScriptView({ script, categories, related = [] }: { script: Catal
               <h1 className="mt-3 font-display text-4xl font-bold tracking-tight md:text-5xl">{script.name}</h1>
               <p className="mt-3 max-w-3xl text-[16.5px] leading-relaxed text-muted-foreground">{script.description}</p>
               <div className="mt-5 flex flex-wrap gap-2">
-                {script.website && <HeaderLink href={script.website}>Website</HeaderLink>}
-                {script.documentation && <HeaderLink href={script.documentation}>Docs</HeaderLink>}
+                {script.website ? <HeaderLink href={script.website}>Website</HeaderLink> : null}
+                {script.documentation ? <HeaderLink href={script.documentation}>Docs</HeaderLink> : null}
                 {script.version && <HeaderLink href={`https://github.com/${script.version.repo}`}>Upstream repo</HeaderLink>}
-                {scriptPath && <HeaderLink href={sourceLinks(script)[0].href}>Source</HeaderLink>}
+                {Boolean(scriptPath) && <HeaderLink href={sourceLinks(script)[0].href}>Source</HeaderLink>}
                 <HeaderLink href={reportIssueUrl(script)} className="border-blood/50 text-blood hover:bg-blood hover:text-primary-foreground">Report issue</HeaderLink>
               </div>
             </div>
@@ -206,7 +206,7 @@ export function ScriptView({ script, categories, related = [] }: { script: Catal
                     </span>
                   </Row>
                 )}
-                {script.config_path && (
+                {Boolean(script.config_path) && (
                   <Row label="Config">
                     <span className="inline-flex max-w-full items-center gap-2 font-mono text-[12.5px]">
                       <span className="truncate" title={script.config_path}>{script.config_path}</span>
@@ -218,22 +218,22 @@ export function ScriptView({ script, categories, related = [] }: { script: Catal
             </Panel>
           )}
 
-          {(creds.username || creds.password) && (
+          {Boolean(creds.username || creds.password) && (
             <Panel title="Default login" className="border-brass/40">
               <dl>
-                {creds.username && (
+                {Boolean(creds.username) && (
                   <Row label="User">
                     <span className="inline-flex items-center gap-2 font-mono text-[13px]">
                       {creds.username}
-                      <CopyButton value={creds.username} what="Username" className="text-muted-foreground hover:text-foreground" />
+                      <CopyButton value={creds.username ?? ""} what="Username" className="text-muted-foreground hover:text-foreground" />
                     </span>
                   </Row>
                 )}
-                {creds.password && (
+                {Boolean(creds.password) && (
                   <Row label="Password">
                     <span className="inline-flex items-center gap-2 font-mono text-[13px]">
                       {creds.password}
-                      <CopyButton value={creds.password} what="Password" className="text-muted-foreground hover:text-foreground" />
+                      <CopyButton value={creds.password ?? ""} what="Password" className="text-muted-foreground hover:text-foreground" />
                     </span>
                   </Row>
                 )}

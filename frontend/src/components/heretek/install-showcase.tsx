@@ -63,14 +63,14 @@ export function InstallShowcase({ scripts }: { scripts: CatalogScript[] }) {
             {" "}
             · default settings
           </p>
-          {r && (r.cpu || r.ram || r.hdd) && (
+          {r != null && Boolean(r.cpu || r.ram || r.hdd) && (
             <p>
               <span className="text-[hsl(172_38%_50%)]">›</span>
               {" "}
               {[r.cpu && `${r.cpu} vCPU`, r.ram && `${formatRam(r.ram)} RAM`, r.hdd && `${r.hdd} GB disk`, os].filter(Boolean).join("  ·  ")}
             </p>
           )}
-          {s.interface_port && (
+          {s.interface_port != null && (
             <p>
               <span className="text-[hsl(172_38%_50%)]">›</span>
               {" "}

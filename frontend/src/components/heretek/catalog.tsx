@@ -76,7 +76,7 @@ export function Catalog({ scripts, categories }: { scripts: CatalogScript[]; cat
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  const osOptions = useMemo(() => Array.from(new Set(scripts.map(osLabel).filter(Boolean) as string[])).sort(), [scripts]);
+  const osOptions = useMemo(() => Array.from(new Set(scripts.map(osLabel).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)), [scripts]);
 
   // Filters are applied in groups so each facet can show how many results it
   // would have with every *other* facet applied.

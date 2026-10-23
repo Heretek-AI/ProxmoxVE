@@ -2,8 +2,8 @@ name: Sync to Standalone Repository
 
 # Mirrors the fork into Heretek-AI/Heretek-ProxmoxVE, keeping only the
 # Heretek scripts. This fork carries upstream's full app catalog; the
-# standalone repo only carries scripts that have a header in ct/headers/
-# (upstream no longer ships ct/headers, so every header there is ours).
+# standalone repo only carries the ct/ scripts that load misc/ from this
+# fork (they default COMMUNITY_SCRIPTS_URL to Heretek-AI/ProxmoxVE).
 
 on:
   push:
@@ -46,11 +46,11 @@ jobs:
           # Heretek scripts only
           rm -rf standalone/ct standalone/install
           mkdir -p standalone/ct/headers standalone/install
-          for header in fork/ct/headers/*; do
-            app="$(basename "$header")"
-            [[ "$app" == ".gitkeep" ]] && continue
-            cp "$header" standalone/ct/headers/
-            [[ -f "fork/ct/${app}.sh" ]] && cp "fork/ct/${app}.sh" standalone/ct/
+          for script in fork/ct/*.sh; do
+            grep -q 'COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/Heretek-AI/' "$script" || continue
+            app="$(basename "$script" .sh)"
+            cp "$script" standalone/ct/
+            [[ -f "fork/ct/headers/${app}" ]] && cp "fork/ct/headers/${app}" standalone/ct/headers/
             [[ -f "fork/install/${app}-install.sh" ]] && cp "fork/install/${app}-install.sh" standalone/install/
           done
 

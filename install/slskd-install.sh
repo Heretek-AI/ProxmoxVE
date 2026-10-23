@@ -13,7 +13,11 @@ setting_up_container
 network_check
 update_os
 
-fetch_and_deploy_gh_release "Slskd" "slskd/slskd" "prebuild" "latest" "/opt/slskd" "slskd-*-linux-x64.zip"
+msg_info "Installing Dependencies"
+$STD apt install -y libicu-dev
+msg_ok "Installed Dependencies"
+
+fetch_and_deploy_gh_release "Slskd" "slskd/slskd" "prebuild" "latest" "/opt/slskd" "slskd-*-linux-$(arch_resolve "x64" "arm64").zip"
 
 msg_info "Configuring Slskd"
 JWT_KEY=$(openssl rand -base64 44)
@@ -32,7 +36,8 @@ sed -i \
   -e 's/^.*picture/#&/' /opt/slskd/config/slskd.yml
 msg_ok "Configured Slskd"
 
-read -rp "${TAB3}Do you want to install Soularr? y/N " soularr
+soularr="${var_slskd_soularr:-}"
+[[ -n "$soularr" ]] || read -rp "${TAB3}Do you want to install Soularr? y/N " soularr
 if [[ ${soularr,,} =~ ^(y|yes)$ ]]; then
   PYTHON_VERSION="3.11" setup_uv
   fetch_and_deploy_gh_release "Soularr" "mrusse/soularr" "tarball" "latest" "/opt/soularr"

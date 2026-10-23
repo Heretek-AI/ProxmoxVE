@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: MickLesk (CanbiZ)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-4096}"
 var_disk="${var_disk:-20}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-yes}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -30,7 +32,7 @@ function update_script() {
   fi
 
   PYTHON_VERSION="3.12" setup_uv
-  NODE_VERSION="22" setup_nodejs
+  NODE_VERSION="22" NODE_MODULE="corepack" setup_nodejs
 
   if check_for_gh_release "gramps-web-api" "gramps-project/gramps-web-api"; then
     msg_info "Stopping Service"
@@ -60,7 +62,7 @@ function update_script() {
     GRAMPS_VERSION=$(/opt/gramps-web/venv/bin/python3 -c "import gramps.version; print('%s%s' % (gramps.version.VERSION_TUPLE[0], gramps.version.VERSION_TUPLE[1]))" 2>/dev/null || echo "60")
     GRAMPS_PLUGINS_DIR="/opt/gramps-web/data/gramps/gramps${GRAMPS_VERSION}/plugins"
     mkdir -p "$GRAMPS_PLUGINS_DIR"
-    $STD wget -q https://github.com/gramps-project/addons/archive/refs/heads/master.zip -O /tmp/gramps-addons.zip
+    curl -fsSL -o /tmp/gramps-addons.zip https://github.com/gramps-project/addons/archive/refs/heads/master.zip
     for addon in FilterRules JSON; do
       unzip -p /tmp/gramps-addons.zip "addons-master/gramps${GRAMPS_VERSION}/download/${addon}.addon.tgz" |
         tar -xz -C "$GRAMPS_PLUGINS_DIR"
@@ -83,9 +85,14 @@ function update_script() {
     msg_info "Updating Gramps Web Frontend"
     cd /opt/gramps-web/frontend
     export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-    $STD corepack enable
+
+    create_backup /opt/gramps-web/frontend/dist/config.js
+
     $STD npm install
     $STD npm run build
+
+    restore_backup
+
     msg_ok "Updated Gramps Web Frontend"
 
     msg_info "Starting Service"
@@ -101,5 +108,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:5000${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:5000${CL}"

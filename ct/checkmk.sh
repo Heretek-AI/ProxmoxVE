@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: Michel Roegl-Brunner (michelroegl-brunner)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-6}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-no}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -32,8 +34,9 @@ function update_script() {
   RELEASE="${RELEASE%%+*}"
   msg_info "Updating checkmk"
   $STD omd stop monitoring
+  $STD omd -f rm monitoringbackup 2>/dev/null || true
   $STD omd cp monitoring monitoringbackup
-  curl_with_retry "https://download.checkmk.com/checkmk/${RELEASE}/check-mk-community-${RELEASE}_0.$(get_os_info codename)_amd64.deb" "/opt/checkmk.deb"
+  curl_download "/opt/checkmk.deb" "https://download.checkmk.com/checkmk/${RELEASE}/check-mk-community-${RELEASE}_0.$(get_os_info codename)_amd64.deb"
   $STD apt install -y /opt/checkmk.deb
   OMD_VERSION=$(omd versions 2>/dev/null | grep "^${RELEASE}" | awk '{print $1}')
   if [[ -z "${OMD_VERSION}" ]]; then
@@ -56,5 +59,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}/monitoring${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}/monitoring${CL}"

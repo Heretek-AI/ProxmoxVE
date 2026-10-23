@@ -15,20 +15,31 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt install -y \
-  libarchive-dev \
   git \
+  libarchive-dev \
+  libassimp-dev \
+  libegl1 \
   libmariadb-dev \
-  redis-server \
+  libx11-6 \
   nginx \
-  libassimp-dev
+  redis-server
 msg_ok "Installed Dependencies"
+
+if [[ "$(arch_resolve)" == "amd64" ]]; then
+  fetch_and_deploy_gh_release "f3d" "f3d-app/f3d" "prebuild" "latest" "/opt/f3d" "F3D-*-Linux-x86_64.tar.gz"
+  ln -sf /opt/f3d/bin/f3d /usr/local/bin/f3d
+else
+  $STD apt install -y f3d
+fi
 
 setup_imagemagick
 PG_VERSION="16" setup_postgresql
 PG_DB_NAME="manyfold" PG_DB_USER="manyfold" setup_postgresql_db
-NODE_VERSION="24" NODE_MODULE="yarn" setup_nodejs
+NODE_VERSION="24" NODE_MODULE="corepack,yarn" setup_nodejs
 
 fetch_and_deploy_gh_release "manyfold" "manyfold3d/manyfold" "tarball" "latest" "/opt/manyfold/app"
+
+useradd -m -s /usr/bin/bash manyfold
 
 RUBY_INSTALL_VERSION=$(cat /opt/manyfold/app/.ruby-version)
 RUBY_VERSION=${RUBY_INSTALL_VERSION} RUBY_INSTALL_RAILS="true" HOME=/home/manyfold setup_ruby
@@ -36,7 +47,6 @@ RUBY_VERSION=${RUBY_INSTALL_VERSION} RUBY_INSTALL_RAILS="true" HOME=/home/manyfo
 msg_info "Configuring Manyfold"
 YARN_VERSION=$(grep '"packageManager":' /opt/manyfold/app/package.json | sed -E 's/.*"(yarn@[0-9\.]+)".*/\1/')
 RELEASE=$(get_latest_github_release "manyfold3d/manyfold")
-useradd -m -s /usr/bin/bash manyfold
 cat <<EOF >/opt/manyfold/.env
 export APP_VERSION=${RELEASE}
 export GUID=1002
@@ -65,7 +75,7 @@ gem install bundler
 bundle install
 gem install sidekiq
 gem install foreman
-corepack enable yarn
+
 rm -f /opt/manyfold/app/config/credentials.yml.enc
 corepack prepare $YARN_VERSION --activate
 corepack use $YARN_VERSION
@@ -78,9 +88,9 @@ $STD mkdir -p /opt/manyfold_data
 msg_ok "Configured Manyfold"
 
 msg_info "Installing Manyfold"
-chown -R manyfold:manyfold {/home/manyfold,/opt/manyfold}
+chown -R manyfold:manyfold {/home/manyfold,/opt/manyfold,/opt/manyfold_data}
 chmod +x /opt/manyfold/user_setup.sh
-$STD npm install --global corepack
+
 $STD sudo -u manyfold bash /opt/manyfold/user_setup.sh
 rm -f /opt/manyfold/user_setup.sh
 msg_ok "Installed Manyfold"
@@ -132,15 +142,10 @@ server {
     }
 }
 EOF
-ln -s /etc/nginx/sites-available/manyfold.conf /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-$STD systemctl reload nginx
+nginx_enable_site manyfold.conf
 msg_ok "Created Services"
 
 motd_ssh
 customize
 
-msg_info "Cleaning up"
-$STD apt-get -y autoremove
-$STD apt-get -y autoclean
-msg_ok "Cleaned"
+cleanup_lxc

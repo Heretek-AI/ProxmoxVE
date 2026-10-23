@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 tteck
 # Author: tteck (tteckster)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.home-assistant.io/
 
 APP="Home Assistant"
-var_tags="${var_tags:-automation;smarthome}"
+var_tags="${var_tags:-automation;smarthome;docker}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-16}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-yes}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -60,7 +62,7 @@ function update_script() {
   fi
   if [ "$UPD" == "3" ]; then
     msg_info "Installing Home Assistant Community Store (HACS)"
-    $STD apt update
+    apt_update_safe
     cd /var/lib/docker/volumes/hass_config/_data
     $STD bash <(curl -fsSL https://get.hacs.xyz)
     msg_ok "Installed Home Assistant Community Store (HACS)"
@@ -70,7 +72,7 @@ function update_script() {
   if [ "$UPD" == "4" ]; then
     msg_info "Installing FileBrowser"
     RELEASE=$(curl -fsSL https://api.github.com/repos/filebrowser/filebrowser/releases/latest | grep -o '"tag_name": ".*"' | sed 's/"//g' | sed 's/tag_name: //g')
-    $STD curl -fsSL https://github.com/filebrowser/filebrowser/releases/download/v2.23.0/linux-amd64-filebrowser.tar.gz | tar -xzv -C /usr/local/bin
+    $STD curl -fsSL https://github.com/filebrowser/filebrowser/releases/download/v2.23.0/linux-$(arch_resolve)-filebrowser.tar.gz | tar -xzv -C /usr/local/bin
     $STD filebrowser config init -a '0.0.0.0'
     $STD filebrowser config set -a '0.0.0.0'
     $STD filebrowser users add admin community-scripts.org --perm.admin
@@ -104,6 +106,6 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}HA: http://${IP}:8123${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}Portainer: https://${IP}:9443${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}HA: http://${IP}:8123${CL}"
+echo -e "${GATEWAY}${BGN}Portainer: https://${IP}:9443${CL}"

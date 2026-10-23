@@ -14,21 +14,20 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
+$STD apt install -y \
   build-essential \
   git \
   openssl \
   ffmpeg \
   python3 \
-  python3-pip \
   python3-dev \
-  python3-numpy \
   redis-server
 msg_ok "Installed Dependencies"
 
 PG_VERSION="16" PG_MODULES="pgvector" setup_postgresql
 PG_DB_NAME="kima" PG_DB_USER="kima" PG_DB_GRANT_SUPERUSER="true" setup_postgresql_db
-NODE_VERSION="22" setup_nodejs
+NODE_VERSION="24" setup_nodejs
+PYTHON_VERSION="3.13" setup_uv
 
 msg_info "Configuring Redis"
 systemctl enable -q --now redis-server
@@ -37,8 +36,8 @@ msg_ok "Configured Redis"
 fetch_and_deploy_gh_release "kima-hub" "Chevron7Locked/kima-hub" "tarball"
 
 msg_info "Installing Python Dependencies"
-export PIP_BREAK_SYSTEM_PACKAGES=1
-$STD pip3 install --no-cache-dir \
+$STD uv venv --python 3.13 /opt/kima-hub/venv
+$STD uv pip install --no-cache --python /opt/kima-hub/venv \
   tensorflow \
   essentia-tensorflow \
   redis \
@@ -56,20 +55,20 @@ msg_ok "Installed Python Dependencies"
 msg_info "Downloading Essentia ML Models"
 mkdir -p /opt/kima-hub/models
 cd /opt/kima-hub/models
-curl -fsSL -o msd-musicnn-1.pb "https://essentia.upf.edu/models/autotagging/msd/msd-musicnn-1.pb"
-curl -fsSL -o mood_happy-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_happy/mood_happy-msd-musicnn-1.pb"
-curl -fsSL -o mood_sad-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_sad/mood_sad-msd-musicnn-1.pb"
-curl -fsSL -o mood_relaxed-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_relaxed/mood_relaxed-msd-musicnn-1.pb"
-curl -fsSL -o mood_aggressive-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_aggressive/mood_aggressive-msd-musicnn-1.pb"
-curl -fsSL -o mood_party-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_party/mood_party-msd-musicnn-1.pb"
-curl -fsSL -o mood_acoustic-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_acoustic/mood_acoustic-msd-musicnn-1.pb"
-curl -fsSL -o mood_electronic-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/mood_electronic/mood_electronic-msd-musicnn-1.pb"
-curl -fsSL -o danceability-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/danceability/danceability-msd-musicnn-1.pb"
-curl -fsSL -o voice_instrumental-msd-musicnn-1.pb "https://essentia.upf.edu/models/classification-heads/voice_instrumental/voice_instrumental-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/autotagging/msd/msd-musicnn-1.pb" "msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_happy/mood_happy-msd-musicnn-1.pb" "mood_happy-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_sad/mood_sad-msd-musicnn-1.pb" "mood_sad-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_relaxed/mood_relaxed-msd-musicnn-1.pb" "mood_relaxed-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_aggressive/mood_aggressive-msd-musicnn-1.pb" "mood_aggressive-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_party/mood_party-msd-musicnn-1.pb" "mood_party-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_acoustic/mood_acoustic-msd-musicnn-1.pb" "mood_acoustic-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/mood_electronic/mood_electronic-msd-musicnn-1.pb" "mood_electronic-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/danceability/danceability-msd-musicnn-1.pb" "danceability-msd-musicnn-1.pb"
+curl_with_retry "https://essentia.upf.edu/models/classification-heads/voice_instrumental/voice_instrumental-msd-musicnn-1.pb" "voice_instrumental-msd-musicnn-1.pb"
 msg_ok "Downloaded Essentia ML Models"
 
 msg_info "Downloading CLAP Model"
-curl -fsSL -o /opt/kima-hub/models/music_audioset_epoch_15_esc_90.14.pt "https://huggingface.co/lukewys/laion_clap/resolve/main/music_audioset_epoch_15_esc_90.14.pt"
+CURL_TIMEOUT=600 curl_with_retry "https://huggingface.co/lukewys/laion_clap/resolve/main/music_audioset_epoch_15_esc_90.14.pt" "/opt/kima-hub/models/music_audioset_epoch_15_esc_90.14.pt"
 msg_ok "Downloaded CLAP Model"
 
 msg_info "Building Backend"
@@ -174,7 +173,7 @@ Environment=BATCH_SIZE=10
 Environment=SLEEP_INTERVAL=5
 Environment=NUM_WORKERS=2
 Environment=THREADS_PER_WORKER=1
-ExecStart=/usr/bin/python3 /opt/kima-hub/services/audio-analyzer/analyzer.py
+ExecStart=/opt/kima-hub/venv/bin/python /opt/kima-hub/services/audio-analyzer/analyzer.py
 Restart=on-failure
 RestartSec=10
 
@@ -197,7 +196,7 @@ Environment=BACKEND_URL=http://localhost:3006
 Environment=MUSIC_PATH=/music
 Environment=SLEEP_INTERVAL=5
 Environment=NUM_WORKERS=1
-ExecStart=/usr/bin/python3 /opt/kima-hub/services/audio-analyzer-clap/analyzer.py
+ExecStart=/opt/kima-hub/venv/bin/python /opt/kima-hub/services/audio-analyzer-clap/analyzer.py
 Restart=on-failure
 RestartSec=10
 

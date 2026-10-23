@@ -13,6 +13,11 @@ setting_up_container
 network_check
 update_os
 
+if is_debian && [[ "$(get_os_version_major)" -lt 13 ]]; then
+  msg_error "UniFi OS Server needs Debian 13: its installer requires a newer Podman than Debian 12 ships."
+  exit 238
+fi
+
 if [[ "${CTTYPE:-1}" != "0" ]]; then
   msg_error "UniFi OS Server requires a privileged LXC container."
   msg_error "Recreate the container with unprivileged=0."
@@ -50,10 +55,11 @@ if ! curl -fsSL "$API_URL" -o "$TEMP_JSON"; then
   msg_error "Failed to fetch data from Ubiquiti API"
   exit 250
 fi
-LATEST=$(jq -r '
+PLATFORM="linux-$(arch_resolve "x64" "arm64")"
+LATEST=$(jq -r --arg platform "$PLATFORM" '
   ._embedded.firmware
   | map(select(.product == "unifi-os-server"))
-  | map(select(.platform == "linux-x64"))
+  | map(select(.platform == $platform))
   | sort_by(.version_major, .version_minor, .version_patch)
   | last
 ' "$TEMP_JSON")

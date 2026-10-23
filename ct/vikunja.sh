@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: MickLesk (Canbiz) | Co-Author: CrazyWolf13
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-1024}"
 var_disk="${var_disk:-4}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-no}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -28,9 +30,9 @@ function update_script() {
     exit
   fi
 
-  RELEASE="$( [[ -f "$HOME/.vikunja" ]] && cat "$HOME/.vikunja" 2>/dev/null || [[ -f /opt/Vikunja_version ]] && cat /opt/Vikunja_version 2>/dev/null || true)"
-  if [[ -z "$RELEASE" ]] || [[ "$RELEASE" == "unstable" ]] || dpkg --compare-versions "${RELEASE:-0.0.0}" lt "1.0.0"; then
-    msg_warn "You are upgrading from Vikunja '$RELEASE'."
+  INSTALLED_VERSION="$( [[ -f "$HOME/.vikunja" ]] && cat "$HOME/.vikunja" 2>/dev/null || [[ -f /opt/Vikunja_version ]] && cat /opt/Vikunja_version 2>/dev/null || true)"
+  if [[ -z "$INSTALLED_VERSION" ]] || [[ "$INSTALLED_VERSION" == "unstable" ]] || dpkg --compare-versions "${INSTALLED_VERSION:-0.0.0}" lt "1.0.0"; then
+    msg_warn "You are upgrading from Vikunja '$INSTALLED_VERSION'."
     msg_warn "This requires MANUAL config changes in /etc/vikunja/config.yml."
     msg_warn "See: https://vikunja.io/changelog/whats-new-in-vikunja-1.0.0/#config-changes"
 
@@ -64,7 +66,7 @@ function update_script() {
     systemctl stop vikunja
     msg_ok "Stopped Service"
 
-    fetch_and_deploy_gh_release "vikunja" "go-vikunja/vikunja" "binary"
+    fetch_and_deploy_gh_release "vikunja" "go-vikunja/vikunja" "binary" "latest" "" "vikunja-*-$(arch_resolve "x86_64" "aarch64").deb"
     $STD systemctl daemon-reload
 
     msg_info "Starting Service"
@@ -81,5 +83,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:3456${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:3456${CL}"

@@ -25,7 +25,7 @@ $STD apt install -y \
 msg_ok "Installed Dependencies"
 
 setup_docker
-fetch_and_deploy_gh_release "cosmos" "azukaar/Cosmos-Server" "prebuild" "latest" "/opt/cosmos" "cosmos-cloud-*-amd64.zip"
+fetch_and_deploy_gh_release "cosmos" "azukaar/Cosmos-Server" "prebuild" "latest" "/opt/cosmos" "cosmos-cloud-*-$(arch_resolve).zip"
 
 msg_info "Setting up Cosmos"
 cd /opt/cosmos
@@ -55,7 +55,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl enable -q --now cosmos
-msg_info "Created Service"
+msg_ok "Created Service"
 
 motd_ssh
 customize

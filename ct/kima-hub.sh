@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: MickLesk (CanbiZ)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-8192}"
 var_disk="${var_disk:-20}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-no}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -29,25 +31,18 @@ function update_script() {
     exit
   fi
 
-  NODE_VERSION="22" setup_nodejs
+  NODE_VERSION="24" setup_nodejs
 
   if check_for_gh_release "kima-hub" "Chevron7Locked/kima-hub"; then
     msg_info "Stopping Services"
     systemctl stop kima-frontend kima-backend kima-analyzer kima-analyzer-clap
     msg_ok "Stopped Services"
 
-    msg_info "Backing up Data"
-    cp /opt/kima-hub/backend/.env /opt/kima-hub-backend-env.bak
-    cp /opt/kima-hub/frontend/.env /opt/kima-hub-frontend-env.bak
-    msg_ok "Backed up Data"
+    create_backup /opt/kima-hub/backend/.env /opt/kima-hub/frontend/.env
 
     CLEAN_INSTALL=1 fetch_and_deploy_gh_release "kima-hub" "Chevron7Locked/kima-hub" "tarball"
 
-    msg_info "Restoring Data"
-    cp /opt/kima-hub-backend-env.bak /opt/kima-hub/backend/.env
-    cp /opt/kima-hub-frontend-env.bak /opt/kima-hub/frontend/.env
-    rm -f /opt/kima-hub-backend-env.bak /opt/kima-hub-frontend-env.bak
-    msg_ok "Restored Data"
+    restore_backup
 
     msg_info "Rebuilding Backend"
     cd /opt/kima-hub/backend
@@ -77,5 +72,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:3030${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:3030${CL}"

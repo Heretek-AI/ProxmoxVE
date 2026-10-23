@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 tteck
 # Author: tteck | Co-Author: havardthom | Co-Author: Slaviša Arežina (tremor021)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-8192}"
 var_disk="${var_disk:-50}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-yes}"
 var_unprivileged="${var_unprivileged:-1}"
 var_gpu="${var_gpu:-yes}"
 
@@ -26,6 +28,7 @@ function update_script() {
   check_container_resources
 
   ensure_dependencies zstd build-essential libmariadb-dev
+  [[ -f /root/.ollama ]] && rm -f /root/.ollama
 
   if [[ -d /opt/open-webui ]]; then
     msg_warn "Legacy installation detected — migrating to uv based install..."
@@ -46,7 +49,13 @@ function update_script() {
 
     msg_info "Installing uv-based Open-WebUI"
     PYTHON_VERSION="3.12" setup_uv
-    $STD uv tool install --python 3.12 --constraint <(echo "numba>=0.60") open-webui[all]
+    installed=0
+    for attempt in 1 2; do
+      $STD uv tool install --python 3.12 open-webui[all] && { installed=1; break; }
+      msg_warn "Open WebUI install attempt $attempt failed, retrying..."
+      sleep 10
+    done
+    ((installed)) || $STD uv tool install --python 3.12 open-webui[all]
     msg_ok "Installed uv-based Open-WebUI"
 
     msg_info "Restoring data"
@@ -91,13 +100,13 @@ EOF
 
   if [ -x "/usr/bin/ollama" ]; then
     msg_info "Checking for Ollama Update"
-    if check_for_gh_release "ollama" "ollama/ollama"; then
+    if check_for_gh_release "ollama-com" "ollama/ollama"; then
       msg_info "Stopping Ollama Service"
       systemctl stop ollama
       msg_ok "Stopped Service"
 
       rm -rf /usr/lib/ollama /usr/bin/ollama
-      if ! fetch_and_deploy_gh_release "ollama" "ollama/ollama" "prebuild" "latest" "/usr/lib/ollama" "ollama-linux-amd64.tar.zst"; then
+      if ! fetch_and_deploy_gh_release "ollama-com" "ollama/ollama" "prebuild" "latest" "/usr/lib/ollama" "ollama-linux-$(arch_resolve).tar.zst"; then
         msg_error "Ollama download or deployment failed – check network connectivity and GitHub API availability"
       else
         ln -sf /usr/lib/ollama/bin/ollama /usr/bin/ollama
@@ -112,7 +121,20 @@ EOF
 
   msg_info "Updating Open WebUI via uv"
   PYTHON_VERSION="3.12" setup_uv
-  $STD uv tool install --force --python 3.12 --constraint <(echo "numba>=0.60") open-webui[all]
+  OWUI_PYTHON="/root/.local/share/uv/tools/open-webui/bin/python3.12"
+  OTEL_ARGS=()
+  if [[ -x "$OWUI_PYTHON" ]]; then
+    while IFS= read -r pkg; do
+      OTEL_ARGS+=(--with "$pkg")
+    done < <(uv pip list --python "$OWUI_PYTHON" --format freeze 2>/dev/null | grep -i '^opentelemetry-' | cut -d= -f1)
+  fi
+  updated=0
+  for attempt in 1 2; do
+    $STD uv tool install --force --python 3.12 "${OTEL_ARGS[@]}" open-webui[all] && { updated=1; break; }
+    msg_warn "Open WebUI update attempt $attempt failed, retrying..."
+    sleep 10
+  done
+  ((updated)) || $STD uv tool install --force --python 3.12 "${OTEL_ARGS[@]}" open-webui[all]
   systemctl restart open-webui
   msg_ok "Updated Open WebUI"
   msg_ok "Updated successfully!"
@@ -125,5 +147,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8080${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:8080${CL}"

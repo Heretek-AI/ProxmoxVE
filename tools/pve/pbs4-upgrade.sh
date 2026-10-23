@@ -33,7 +33,7 @@ msg_ok() { echo -e "${BFR} ${CM} ${GN}$1${CL}"; }
 msg_error() { echo -e "${BFR} ${CROSS} ${RD}$1${CL}"; }
 
 # Telemetry
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func) 2>/dev/null || true
+source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/api/api.func") 2>/dev/null || true
 declare -f init_tool_telemetry &>/dev/null && init_tool_telemetry "pbs4-upgrade" "pve"
 
 start_routines() {
@@ -48,6 +48,19 @@ start_routines() {
     msg_ok "Backed up Proxmox Backup Server 3"
     ;;
   no) msg_error "Selected no to Backup" ;;
+  esac
+
+  # --- Update Current PBS 3 System ---
+  CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "PBS 3 UPDATE" --menu \
+    "\nUpdate current PBS 3 (Bookworm) packages before upgrade?" 14 58 2 "yes" " " "no" " " 3>&2 2>&1 1>&3)
+  case $CHOICE in
+  yes)
+    msg_info "Updating current PBS 3 packages"
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade
+    msg_ok "Updated current PBS 3 packages"
+    ;;
+  no) msg_error "Skipped updating current packages" ;;
   esac
 
   # --- Debian 13 Sources ---
@@ -185,5 +198,11 @@ while true; do
   *) echo "Please answer yes or no." ;;
   esac
 done
+
+if [ "$(dpkg --print-architecture 2>/dev/null)" = "arm64" ]; then
+  header_info
+  msg_error "This upgrade script targets the amd64 Proxmox repositories and is not supported on ARM64."
+  exit 1
+fi
 
 start_routines

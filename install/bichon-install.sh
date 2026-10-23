@@ -13,7 +13,7 @@ setting_up_container
 network_check
 update_os
 
-fetch_and_deploy_gh_release "bichon" "rustmailer/bichon" "prebuild" "latest" "/opt/bichon" "bichon-*-x86_64-unknown-linux-gnu.tar.gz"
+fetch_and_deploy_gh_release "bichon" "rustmailer/bichon" "prebuild" "latest" "/opt/bichon" "bichon-*-$(arch_resolve "x86_64" "aarch64")-unknown-linux-gnu.tar.gz"
 
 read -r -p "${TAB3}Enter the public URL for Bichon (e.g., https://bichon.yourdomain.com) or leave empty to use container IP: " bichon_url
 if [[ -z "$bichon_url" ]]; then
@@ -28,7 +28,7 @@ fi
 
 msg_info "Setting up Bichon"
 mkdir -p /opt/bichon-data
-BICHON_ENC_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+BICHON_ENC_PASSWORD=$(random_password 32)
 
 cat <<EOF >/opt/bichon/bichon.env
 BICHON_ROOT_DIR=/opt/bichon-data
@@ -50,15 +50,17 @@ Type=simple
 User=root
 EnvironmentFile=/opt/bichon/bichon.env
 WorkingDirectory=/opt/bichon
-ExecStart=/opt/bichon/bichon
+ExecStart=/opt/bichon/bichon-server
 Restart=on-failure
 RestartSec=5
+
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
 systemctl enable -q --now bichon
-msg_info "Created Service"
+msg_ok "Created Service"
 
 motd_ssh
 customize

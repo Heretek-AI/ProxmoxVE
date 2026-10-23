@@ -21,14 +21,13 @@ msg_ok "Installed Dependencies"
 
 PG_VERSION="16" setup_postgresql
 PG_DB_NAME="yamtrack" PG_DB_USER="yamtrack" setup_postgresql_db
-PYTHON_VERSION="3.12" setup_uv
 
 fetch_and_deploy_gh_release "yamtrack" "FuzzyGrim/Yamtrack" "tarball"
+PYTHON_VERSION="3.12" UV_PROJECT_DIR="/opt/yamtrack" setup_uv
 
 msg_info "Installing Python Dependencies"
 cd /opt/yamtrack
-$STD uv venv .venv
-$STD uv pip install --no-cache-dir -r requirements.txt
+$STD uv sync --locked
 msg_ok "Installed Python Dependencies"
 
 msg_info "Configuring Yamtrack"

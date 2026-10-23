@@ -14,18 +14,26 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-setup_deb822_repo \
-  "microsoft" \
-  "https://packages.microsoft.com/keys/microsoft-2025.asc" \
-  "https://packages.microsoft.com/debian/13/prod/" \
-  "trixie" \
-  "main"
-$STD apt install -y \
-  libicu-dev \
-  libssl-dev \
-  gettext-base \
-  dotnet-sdk-8.0 \
-  aspnetcore-runtime-8.0
+if [[ "$(arch_resolve)" == "arm64" ]]; then
+  $STD apt install -y libicu-dev libssl-dev gettext-base
+  curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+  $STD bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/lib/dotnet8
+  ln -sf /usr/lib/dotnet8/dotnet /usr/bin/dotnet
+  rm -f /tmp/dotnet-install.sh
+else
+  setup_deb822_repo \
+    "microsoft" \
+    "https://packages.microsoft.com/keys/microsoft-2025.asc" \
+    "https://packages.microsoft.com/debian/13/prod/" \
+    "trixie" \
+    "main"
+  $STD apt install -y \
+    libicu-dev \
+    libssl-dev \
+    gettext-base \
+    dotnet-sdk-8.0 \
+    aspnetcore-runtime-8.0
+fi
 msg_ok "Installed Dependencies"
 
 NODE_VERSION="22" setup_nodejs
@@ -36,7 +44,7 @@ mkdir -p /opt/immichframe
 cd /tmp/immichframe
 $STD dotnet publish ImmichFrame.WebApi/ImmichFrame.WebApi.csproj \
   --configuration Release \
-  --runtime linux-x64 \
+  --runtime "$(arch_resolve "linux-x64" "linux-arm64")" \
   --self-contained false \
   --output /opt/immichframe
 cd /tmp/immichframe/immichFrame.Web
@@ -46,11 +54,17 @@ cp -r build/* /opt/immichframe/wwwroot
 rm -rf /tmp/immichframe
 mkdir -p /opt/immichframe/Config
 curl -fsSL "https://raw.githubusercontent.com/immichFrame/ImmichFrame/main/docker/Settings.example.yml" -o /opt/immichframe/Config/Settings.yml
+sed -i '/^[[:space:]]*- UUID[[:space:]]*$/d' /opt/immichframe/Config/Settings.yml
 useradd -r -s /sbin/nologin -d /opt/immichframe -M immichframe
 chown -R immichframe:immichframe /opt/immichframe
 msg_ok "Setup ImmichFrame"
 
 msg_info "Creating Service"
+ADMIN_PASSWORD=$(openssl rand -hex 16)
+cat <<EOF >~/immichframe.creds
+ImmichFrame Admin User: admin
+ImmichFrame Admin Password: $ADMIN_PASSWORD
+EOF
 cat <<EOF >/etc/systemd/system/immichframe.service
 [Unit]
 Description=ImmichFrame Digital Photo Frame
@@ -65,6 +79,7 @@ ExecStart=/usr/bin/dotnet /opt/immichframe/ImmichFrame.WebApi.dll
 Environment=ASPNETCORE_URLS=http://0.0.0.0:8080
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=DOTNET_CONTENTROOT=/opt/immichframe
+Environment=IMMICHFRAME_ADMIN_PASSWORD=$ADMIN_PASSWORD
 Restart=always
 RestartSec=5
 StandardOutput=journal

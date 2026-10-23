@@ -19,7 +19,7 @@ $STD apt install -y \
   ansible
 msg_ok "Installed Dependencies"
 
-fetch_and_deploy_gh_release "semaphore" "semaphoreui/semaphore" "binary" "latest" "/opt/semaphore" "semaphore_*_linux_amd64.deb"
+fetch_and_deploy_gh_release "semaphore" "semaphoreui/semaphore" "binary" "latest" "/opt/semaphore" "semaphore_*_linux_$(arch_resolve).deb"
 
 msg_info "Configuring Semaphore"
 mkdir -p /opt/semaphore
@@ -27,7 +27,7 @@ cd /opt/semaphore
 SEM_HASH=$(openssl rand -base64 32)
 SEM_ENCRYPTION=$(openssl rand -base64 32)
 SEM_KEY=$(openssl rand -base64 32)
-SEM_PW=$(openssl rand -base64 12)
+SEM_PW=$(random_password 16)
 cat <<EOF >/opt/semaphore/config.json
 {
   "sqlite": {

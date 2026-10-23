@@ -20,6 +20,7 @@ $STD apt install -y \
   zstd
 msg_ok "Installed Dependencies"
 
+if [[ "$(arch_resolve)" == "amd64" ]]; then
 msg_info "Setting up Intel® Repositories"
 mkdir -p /usr/share/keyrings
 curl -fsSL https://repositories.intel.com/gpu/intel-graphics.key | gpg --dearmor -o /usr/share/keyrings/intel-graphics.gpg 2>/dev/null || true
@@ -39,7 +40,7 @@ Suites: all
 Components: main
 Signed-By: /usr/share/keyrings/oneapi-archive-keyring.gpg
 EOF
-$STD apt update
+apt_update_safe
 msg_ok "Set up Intel® Repositories"
 
 msg_info "Installing Intel® Level Zero"
@@ -56,18 +57,22 @@ else
   }
 fi
 msg_ok "Installed Intel® Level Zero"
-
-msg_info "Installing Intel® oneAPI Base Toolkit (Patience)"
-$STD apt install -y --no-install-recommends intel-basekit-2024.1
-msg_ok "Installed Intel® oneAPI Base Toolkit"
+fi
 
 msg_info "Installing Ollama (Patience)"
 OLLAMA_INSTALL_DIR="/usr/local/lib/ollama"
 BINDIR="/usr/local/bin"
 mkdir -p "$OLLAMA_INSTALL_DIR"
-if ! fetch_and_deploy_gh_release "ollama" "ollama/ollama" "prebuild" "latest" "$OLLAMA_INSTALL_DIR" "ollama-linux-amd64.tar.zst"; then
+if ! fetch_and_deploy_gh_release "ollama-com" "ollama/ollama" "prebuild" "latest" "$OLLAMA_INSTALL_DIR" "ollama-linux-$(arch_resolve).tar.zst"; then
   msg_error "Failed to download or deploy Ollama – check network connectivity and GitHub API availability"
   exit 250
+fi
+# If /dev/kfd exists assume an AMD GPU is installed, and install ROCM support for ollama
+if [[ -e /dev/kfd ]]; then
+  if ! fetch_and_deploy_gh_release "ollama-rocm-com" "ollama/ollama" "prebuild" "latest" "$OLLAMA_INSTALL_DIR/lib" "ollama-linux-amd64-rocm.tar.zst"; then
+    msg_error "Failed to download or deploy Ollama AMD ROCM suport – check network connectivity and GitHub API availability"
+    exit 250
+  fi
 fi
 ln -sf "$OLLAMA_INSTALL_DIR/bin/ollama" "$BINDIR/ollama"
 msg_ok "Installed Ollama"
@@ -102,6 +107,10 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
+if [[ -e /dev/kfd ]]; then
+  sed -i '/Environment=OLLAMA_INTEL_GPU=true/a Environment=OLLAMA_IGPU_ENABLE=1' \
+      /etc/systemd/system/ollama.service
+fi
 systemctl enable -q --now ollama
 msg_ok "Created Service"
 

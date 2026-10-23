@@ -1,5 +1,10 @@
 name: Sync to Standalone Repository
 
+# Mirrors the fork into Heretek-AI/Heretek-ProxmoxVE, keeping only the
+# Heretek scripts. This fork carries upstream's full app catalog; the
+# standalone repo only carries scripts that have a header in ct/headers/
+# (upstream no longer ships ct/headers, so every header there is ours).
+
 on:
   push:
     branches:
@@ -16,7 +21,7 @@ jobs:
       - name: Checkout fork repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          path: fork
 
       - name: Checkout standalone repository
         uses: actions/checkout@v4
@@ -26,27 +31,38 @@ jobs:
           path: standalone
           fetch-depth: 0
 
-      - name: Sync entire codebase (excluding README.md)
+      - name: Sync shared code and Heretek scripts
         run: |
-          # Sync all files except README.md using rsync
-          # --delete removes files in target that don't exist in source
-          # --exclude patterns prevent syncing .git and README.md
-          rsync -av --delete \
+          # Shared code, docs and frontend. The standalone repo keeps its own
+          # README.md and .github/, and ct/ and install/ are handled below.
+          rsync -a --delete \
             --exclude='.git/' \
+            --exclude='.github/' \
             --exclude='README.md' \
-            ./ standalone/
-          
-          echo "Sync complete!"
-          echo "Files synced:"
-          ls -la standalone/
+            --exclude='/ct/' \
+            --exclude='/install/' \
+            fork/ standalone/
+
+          # Heretek scripts only
+          rm -rf standalone/ct standalone/install
+          mkdir -p standalone/ct/headers standalone/install
+          for header in fork/ct/headers/*; do
+            app="$(basename "$header")"
+            [[ "$app" == ".gitkeep" ]] && continue
+            cp "$header" standalone/ct/headers/
+            [[ -f "fork/ct/${app}.sh" ]] && cp "fork/ct/${app}.sh" standalone/ct/
+            [[ -f "fork/install/${app}-install.sh" ]] && cp "fork/install/${app}-install.sh" standalone/install/
+          done
+
+          echo "Synced scripts:"
+          ls standalone/ct
 
       - name: Commit and push to standalone
         run: |
           cd standalone
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Check if there are any changes (including untracked files)
+
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit"
           else

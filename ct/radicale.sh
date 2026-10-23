@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: tremor021
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-512}"
 var_disk="${var_disk:-2}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-yes}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -33,22 +35,13 @@ function update_script() {
     systemctl stop radicale
     msg_ok "Stopped service"
 
-    msg_info "Backing up users file"
-    cp /opt/radicale/users /opt/radicale_users_backup
-    msg_ok "Backed up users file"
-
     PYTHON_VERSION="3.13" setup_uv
-    CLEAN_INSTALL=1 fetch_and_deploy_gh_release "Radicale" "Kozea/Radicale" "tarball" "latest" "/opt/radicale"
-
-    msg_info "Restoring users file"
-    rm -f /opt/radicale/users
-    mv /opt/radicale_users_backup /opt/radicale/users
-    msg_ok "Restored users file"
+    CLEAN_INSTALL=1 CLEAN_INSTALL_KEEP="users" fetch_and_deploy_gh_release "Radicale" "Kozea/Radicale" "tarball" "latest" "/opt/radicale"
 
     if grep -q 'start.sh' /etc/systemd/system/radicale.service; then
       sed -i -e '/^Description/i[Unit]' \
         -e '\|^ExecStart|iWorkingDirectory=/opt/radicale' \
-        -e 's|^ExecStart=.*|ExecStart=/usr/local/bin/uv run -m radicale --config /etc/radicale/config|' /etc/systemd/system/radicale.service
+        -e 's|^ExecStart=.*|ExecStart=/usr/local/bin/uv run --extra bcrypt --extra argon2 -m radicale --config /etc/radicale/config|' /etc/systemd/system/radicale.service
       systemctl daemon-reload
     fi
     if [[ ! -f /etc/radicale/config ]]; then
@@ -77,6 +70,14 @@ EOF
     msg_ok "Started service"
     msg_ok "Updated Successfully!"
   fi
+
+  if grep -q 'uv run -m radicale' /etc/systemd/system/radicale.service && grep -q '^argon2 *=' /opt/radicale/pyproject.toml; then
+    msg_info "Enabling bcrypt/argon2 support"
+    sed -i 's|uv run -m radicale|uv run --extra bcrypt --extra argon2 -m radicale|' /etc/systemd/system/radicale.service
+    systemctl daemon-reload
+    systemctl restart radicale
+    msg_ok "Enabled bcrypt/argon2 support"
+  fi
   exit
 }
 
@@ -86,5 +87,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:5232${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:5232${CL}"

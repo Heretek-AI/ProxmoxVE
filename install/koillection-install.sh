@@ -13,7 +13,7 @@ setting_up_container
 network_check
 update_os
 
-NODE_VERSION="24" NODE_MODULE="yarn" setup_nodejs
+NODE_VERSION="26" NODE_MODULE="yarn" setup_nodejs
 PG_VERSION="16" setup_postgresql
 PHP_VERSION="8.5" PHP_APACHE="YES" setup_php
 setup_composer
@@ -38,6 +38,7 @@ export APP_RUNTIME='Symfony\Component\Runtime\SymfonyRuntime'
 $STD composer install --no-dev -o --no-interaction --classmap-authoritative
 $STD php bin/console doctrine:migrations:migrate --no-interaction
 $STD php bin/console app:translations:dump
+$STD php bin/console lexik:jwt:generate-keypair --skip-if-exists
 cd assets/
 $STD yarn install
 $STD yarn build
@@ -51,6 +52,7 @@ cat <<EOF >/etc/apache2/sites-available/koillection.conf
     ServerName koillection
     DocumentRoot /opt/koillection/public
     SetEnv APP_RUNTIME "Symfony\\Component\\Runtime\\SymfonyRuntime"
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=\$1
     <Directory /opt/koillection/public>
         Options Indexes FollowSymLinks
         AllowOverride All

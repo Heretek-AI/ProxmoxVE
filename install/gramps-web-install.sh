@@ -38,7 +38,7 @@ $STD apt install -y \
 msg_ok "Installed Dependencies"
 
 PYTHON_VERSION="3.12" setup_uv
-NODE_VERSION="22" setup_nodejs
+NODE_VERSION="22" NODE_MODULE="corepack" setup_nodejs
 
 fetch_and_deploy_gh_release "gramps-web-api" "gramps-project/gramps-web-api" "tarball" "latest" "/opt/gramps-web-api"
 fetch_and_deploy_gh_release "gramps-web" "gramps-project/gramps-web" "tarball" "latest" "/opt/gramps-web/frontend"
@@ -82,7 +82,7 @@ GRAMPS_PLUGINS_DIR="/opt/gramps-web/data/gramps/gramps${GRAMPS_VERSION}/plugins"
 mkdir -p "$GRAMPS_PLUGINS_DIR"
 
 msg_info "Installing Gramps Addons (gramps${GRAMPS_VERSION})"
-$STD wget -q https://github.com/gramps-project/addons/archive/refs/heads/master.zip -O /tmp/gramps-addons.zip
+curl -fsSL -o /tmp/gramps-addons.zip https://github.com/gramps-project/addons/archive/refs/heads/master.zip
 for addon in FilterRules JSON; do
   unzip -p /tmp/gramps-addons.zip "addons-master/gramps${GRAMPS_VERSION}/download/${addon}.addon.tgz" | \
     tar -xz -C "$GRAMPS_PLUGINS_DIR"
@@ -92,7 +92,7 @@ msg_ok "Installed Gramps Addons"
 
 cd /opt/gramps-web/frontend
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-$STD corepack enable
+
 $STD npm install
 $STD npm run build
 cd /opt/gramps-web-api

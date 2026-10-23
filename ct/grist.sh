@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: cfurrow | Co-Author: Slaviša Arežina (tremor021)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -12,6 +13,7 @@ var_ram="${var_ram:-3072}"
 var_disk="${var_disk:-6}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-13}"
+var_arm64="${var_arm64:-yes}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -36,21 +38,14 @@ function update_script() {
     systemctl stop grist
     msg_ok "Stopped Service"
 
-    msg_info "Creating backup"
-    rm -rf /opt/grist_bak
-    mv /opt/grist /opt/grist_bak
-    msg_ok "Backup created"
+    create_backup /opt/grist/.env /opt/grist/grist-sessions.db /opt/grist/landing.db
 
-    fetch_and_deploy_gh_release "grist" "gristlabs/grist-core" "tarball"
+    CLEAN_INSTALL=1 CLEAN_INSTALL_KEEP="docs" fetch_and_deploy_gh_release "grist" "gristlabs/grist-core" "tarball"
+
+    restore_backup
 
     msg_info "Updating Grist"
     mkdir -p /opt/grist/docs
-    cp -n /opt/grist_bak/.env /opt/grist/.env
-    if ls /opt/grist_bak/docs/* &>/dev/null; then
-      cp -r /opt/grist_bak/docs/* /opt/grist/docs/
-    fi
-    [[ -f /opt/grist_bak/grist-sessions.db ]] && cp /opt/grist_bak/grist-sessions.db /opt/grist/grist-sessions.db
-    [[ -f /opt/grist_bak/landing.db ]] && cp /opt/grist_bak/landing.db /opt/grist/landing.db
     cd /opt/grist
     $STD yarn install
     $STD yarn run build:prod
@@ -72,5 +67,5 @@ description
 
 msg_ok "Completed successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}Grist: http://${IP}:8484${CL}"
+echo -e "${INFO}${YW}Access it using the following URL:${CL}"
+echo -e "${GATEWAY}${BGN}http://${IP}:8484${CL}"

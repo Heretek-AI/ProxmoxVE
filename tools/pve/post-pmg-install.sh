@@ -44,13 +44,18 @@ msg_error() {
 }
 
 # Telemetry
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func) 2>/dev/null || true
+source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/api/api.func") 2>/dev/null || true
 declare -f init_tool_telemetry &>/dev/null && init_tool_telemetry "post-pmg-install" "pve"
 
 if ! dpkg -s proxmox-mailgateway-container >/dev/null 2>&1 &&
   ! dpkg -s proxmox-mailgateway >/dev/null 2>&1; then
   msg_error "This script is only intended for Proxmox Mail Gateway"
   exit 232
+fi
+
+if [ "$(dpkg --print-architecture 2>/dev/null)" = "arm64" ]; then
+  msg_error "Proxmox Mail Gateway does not support ARM64."
+  exit 1
 fi
 
 repo_state() {

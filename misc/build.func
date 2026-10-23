@@ -114,11 +114,7 @@ _bootstrap_source() {
     _bootstrap_die "${url##*/} loaded but incomplete (missing ${probe})"
 }
 
-# Set default URL if not already defined by the calling script
-COMMUNITY_SCRIPTS_URL="${COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main}"
-export COMMUNITY_SCRIPTS_URL
-
-_FUNC_BASE="${COMMUNITY_SCRIPTS_URL}/misc"
+_FUNC_BASE="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc"
 _bootstrap_source "$_FUNC_BASE/api.func" post_to_api
 _bootstrap_source "$_FUNC_BASE/core.func" load_functions
 _bootstrap_source "$_FUNC_BASE/error_handler.func" catch_errors
@@ -4133,7 +4129,7 @@ check_container_os_guard() {
 # ------------------------------------------------------------------------------
 
 start() {
-  source <(curl -fsSL ${COMMUNITY_SCRIPTS_URL}/misc/tools.func)
+  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/tools.func)
   if command -v pveversion >/dev/null 2>&1; then
     runtime_script_status_guard install || return 0
     install_script || return 0
@@ -4429,9 +4425,9 @@ build_container() {
   # Build PCT_OPTIONS as string for export
   local _func_url
   if [ "$var_os" == "alpine" ]; then
-    _func_url="${COMMUNITY_SCRIPTS_URL}/misc/alpine-install.func"
+    _func_url="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func"
   else
-    _func_url="${COMMUNITY_SCRIPTS_URL}/misc/install.func"
+    _func_url="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func"
   fi
   export FUNCTIONS_FILE_PATH="$(curl -fsSL "$_func_url")"
   if [[ -z "$FUNCTIONS_FILE_PATH" || ${#FUNCTIONS_FILE_PATH} -lt 100 ]]; then
@@ -5194,7 +5190,7 @@ EOF
     export CONTAINER_INSTALLING=true
 
     local _install_script
-    _install_script="$(curl -fsSL "${COMMUNITY_SCRIPTS_URL}/install/${var_install}.sh")"
+    _install_script="$(curl -fsSL "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh")"
     lxc-attach -n "$CTID" -- bash -c "$_install_script"
     local lxc_exit=$?
 
@@ -5539,7 +5535,7 @@ EOF
         if [[ "${DEV_MODE_MOTD:-false}" == "true" ]]; then
           echo -e "${TAB}${HOLD}${DGN}Setting up MOTD and SSH for debugging...${CL}"
           if pct exec "$CTID" -- bash -c "
-              source <(curl -fsSL ${COMMUNITY_SCRIPTS_URL}/misc/install.func)
+              source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func)
               declare -f motd_ssh >/dev/null 2>&1 && motd_ssh || true
             " >/dev/null 2>&1; then
             local ct_ip=$(pct exec "$CTID" ip a s dev eth0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1)
@@ -5618,7 +5614,7 @@ EOF
           set +Eeuo pipefail
           trap - ERR
           local _install_script
-          _install_script="$(curl -fsSL "${COMMUNITY_SCRIPTS_URL}/install/${var_install}.sh")"
+          _install_script="$(curl -fsSL "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh")"
           lxc-attach -n "$CTID" -- bash -c "$_install_script"
           local apt_retry_exit=$?
           set -Eeuo pipefail
@@ -7157,33 +7153,46 @@ create_lxc_container() {
 # ------------------------------------------------------------------------------
 description() {
   IP=$(pct exec "$CTID" ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
-  # Generate LXC Description - Heretek-AI themed
+  local script_slug script_url donate_url
+
+  script_slug="${SCRIPT_SLUG:-${NSAPP}}"
+  script_slug="$(echo "$script_slug" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+  script_url="https://community-scripts.org/scripts/${script_slug}"
+  donate_url="https://community-scripts.org/donate"
+
+  # Generate LXC Description
   DESCRIPTION=$(
     cat <<EOF
 <div align='center'>
-  <a href='https://github.com/Heretek-AI/ProxmoxVE' target='_blank' rel='noopener noreferrer'>
-    <img src='https://raw.githubusercontent.com/Heretek-AI/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Heretek-AI Logo' style='width:81px;height:112px;'/>
+  <a href='https://community-scripts.org' target='_blank' rel='noopener noreferrer'>
+    <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
   </a>
 
-  <h2 style='font-size: 24px; margin: 20px 0; color: #dc2626;'>${APP} LXC</h2>
+  <h2 style='font-size: 24px; margin: 20px 0;'>${APP} LXC</h2>
 
   <p style='margin: 16px 0;'>
-    <a href='https://discord.gg/3AnUqsXnmK' target='_blank' rel='noopener noreferrer'>
-      <img src='https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white' alt='Discord' />
+    <a href='${donate_url}' target='_blank' rel='noopener noreferrer'>
+      <img src='https://img.shields.io/badge/❤️-Sponsoring%20%26%20Donations-FF5E5B' alt='Sponsoring and donations' />
+    </a>
+  </p>
+
+  <p style='margin: 12px 0;'>
+    <a href='${script_url}' target='_blank' rel='noopener noreferrer'>
+      <img src='https://img.shields.io/badge/📦-Open%20Script%20Page-00617f' alt='Open script page' />
     </a>
   </p>
 
   <span style='margin: 0 10px;'>
-    <i class="fa fa-github fa-fw" style="color: #dc2626;"></i>
-    <a href='https://github.com/Heretek-AI/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #dc2626;'>GitHub</a>
+    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
   </span>
   <span style='margin: 0 10px;'>
-    <i class="fa fa-comments fa-fw" style="color: #dc2626;"></i>
-    <a href='https://github.com/Heretek-AI/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #dc2626;'>Discussions</a>
+    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/community-scripts/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
   </span>
   <span style='margin: 0 10px;'>
-    <i class="fa fa-exclamation-circle fa-fw" style="color: #dc2626;"></i>
-    <a href='https://github.com/Heretek-AI/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #dc2626;'>Issues</a>
+    <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
   </span>
 </div>
 EOF

@@ -1,0 +1,66 @@
+name: Heretek checks
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-files:
+    name: Upstream files untouched
+    # The sync pull request is the one place upstream files are meant to change.
+    if: github.head_ref != 'upstream-sync'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Compare with the last merged upstream commit
+        run: |
+          git fetch --no-tags https://github.com/community-scripts/ProxmoxVE.git main
+          base="$(git merge-base HEAD FETCH_HEAD)"
+
+          # Files upstream had at the last sync that this tree changes or deletes.
+          # .github/dependabot.yml is deleted on purpose (see docs/FORK.md).
+          changed="$(git diff --name-only --diff-filter=MD "$base" HEAD -- . ':!.github/dependabot.yml')"
+          if [ -n "$changed" ]; then
+            echo "::error::These files belong to upstream and must match it:"
+            echo "$changed"
+            echo
+            echo "Put Heretek changes in Heretek-owned files instead. See docs/FORK.md."
+            exit 1
+          fi
+          echo "All upstream files match upstream."
+
+  shellcheck:
+    name: ShellCheck Heretek scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Lint scripts this pull request adds or changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags https://github.com/community-scripts/ProxmoxVE.git main
+          upstream_base="$(git merge-base HEAD FETCH_HEAD)"
+
+          # Heretek scripts are the ct/ and install/ files upstream doesn't have.
+          mapfile -t heretek < <(git diff --name-only --diff-filter=A "$upstream_base" HEAD -- 'ct/*.sh' 'install/*.sh')
+          if [ -n "${BASE_SHA:-}" ]; then
+            mapfile -t touched < <(git diff --name-only "$BASE_SHA" HEAD)
+            mapfile -t heretek < <(comm -12 <(printf '%s\n' "${heretek[@]}" | sort) <(printf '%s\n' "${touched[@]}" | sort))
+          fi
+
+          if [ "${#heretek[@]}" -eq 0 ] || [ -z "${heretek[0]}" ]; then
+            echo "No Heretek scripts to check."
+            exit 0
+          fi
+          printf 'Checking %s\n' "${heretek[@]}"
+          shellcheck --severity=warning --exclude=SC1090 "${heretek[@]}"

@@ -1,14 +1,17 @@
 name: Sync to Standalone Repository
 
-# Mirrors the fork into Heretek-AI/Heretek-ProxmoxVE, keeping only the
-# Heretek scripts. This fork carries upstream's full app catalog; the
-# standalone repo only carries the ct/ scripts that load misc/ from this
-# fork (they default COMMUNITY_SCRIPTS_URL to Heretek-AI/ProxmoxVE).
+# Mirrors the Heretek scripts into Heretek-AI/Heretek-ProxmoxVE. This fork
+# carries upstream's full app catalog; the standalone repo carries only the
+# scripts that default COMMUNITY_SCRIPTS_URL to Heretek-AI/ProxmoxVE.
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "ct/**"
+      - "install/**"
+      - ".github/workflows/heretek-sync-standalone.yml"
   workflow_dispatch:
 
 permissions:
@@ -16,6 +19,7 @@ permissions:
 
 jobs:
   sync:
+    if: github.repository == 'Heretek-AI/ProxmoxVE'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout fork repository
@@ -31,26 +35,20 @@ jobs:
           path: standalone
           fetch-depth: 0
 
-      - name: Sync shared code and Heretek scripts
+      - name: Sync Heretek scripts
         run: |
-          # Shared code, docs and frontend. The standalone repo keeps its own
-          # README.md and .github/, and ct/ and install/ are handled below.
-          rsync -a --delete \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='README.md' \
-            --exclude='/ct/' \
-            --exclude='/install/' \
-            fork/ standalone/
-
-          # Heretek scripts only
-          rm -rf standalone/ct standalone/install
-          mkdir -p standalone/ct/headers standalone/install
+          # The standalone repo carries only the Heretek scripts plus its own
+          # README.md and .github/. The scripts load the engine from
+          # community-scripts/core and their install scripts from this fork.
+          find standalone -mindepth 1 -maxdepth 1 \
+            ! -name .git ! -name .github ! -name README.md \
+            -exec rm -rf {} +
+          cp fork/LICENSE standalone/
+          mkdir -p standalone/ct standalone/install
           for script in fork/ct/*.sh; do
             grep -q 'COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/Heretek-AI/' "$script" || continue
             app="$(basename "$script" .sh)"
             cp "$script" standalone/ct/
-            [[ -f "fork/ct/headers/${app}" ]] && cp "fork/ct/headers/${app}" standalone/ct/headers/
             [[ -f "fork/install/${app}-install.sh" ]] && cp "fork/install/${app}-install.sh" standalone/install/
           done
 

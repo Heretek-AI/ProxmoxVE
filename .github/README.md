@@ -18,7 +18,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/Heretek-AI/ProxmoxVE/blob/main/CONTRIBUTING.md">
+    <a href="https://github.com/Heretek-AI/ProxmoxVE/blob/main/docs/FORK.md">
       <img src="https://img.shields.io/badge/🤝_Contribute-Guidelines-ff4785?style=for-the-badge&labelColor=2d3748" alt="Contribute" />
     </a>
     <a href="https://github.com/Heretek-AI/ProxmoxVE/tree/main/docs/guides">
@@ -57,7 +57,7 @@ While the orthodox **[community-scripts/ProxmoxVE](https://github.com/community-
 
 ## 🏛️ Relationship to the Orthodox Repository
 
-This fork maintains synchronization with **[community-scripts/ProxmoxVE](https://github.com/community-scripts/ProxmoxVE)** while adding experimental scripts that may not yet meet the stability requirements for upstream inclusion.
+This fork maintains synchronization with **[community-scripts/ProxmoxVE](https://github.com/community-scripts/ProxmoxVE)** while adding experimental scripts that may not yet meet the stability requirements for upstream inclusion. See [how this fork works](../docs/FORK.md).
 
 | Aspect | Orthodox (Upstream) | Heretek (This Fork) |
 |--------|---------------------|---------------------|
@@ -316,7 +316,7 @@ This adds a menu to your Proxmox interface for easy script access without visiti
 <div align="center">
   <br />
   
-  👉 Check our **[Contributing Guidelines](https://github.com/Heretek-AI/ProxmoxVE/blob/main/CONTRIBUTING.md)** to get started
+  👉 Check our **[Contributing Guidelines](https://github.com/Heretek-AI/ProxmoxVE/blob/main/docs/FORK.md)** to get started
   
 </div>
 

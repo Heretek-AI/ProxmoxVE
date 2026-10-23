@@ -1,0 +1,39 @@
+name: Disable upstream workflows
+
+# Workflows inherited from community-scripts/ProxmoxVE stay byte-identical to
+# upstream so syncs never conflict. Several of them have no repository guard
+# (PocketBase bots on self-hosted runners, issue lockers, branch cleanup), so
+# this disables every workflow that isn't a heretek-*.yml file. The enabled
+# state lives in the repository settings, not in git.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  disable:
+    if: github.repository == 'Heretek-AI/ProxmoxVE'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disable non-Heretek workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/$REPO/actions/workflows" \
+            --jq '.workflows[] | select(.state == "active") | [.id, .path] | @tsv' |
+            while IFS=$'\t' read -r id path; do
+              case "$path" in
+                .github/workflows/heretek-*) continue ;;
+                .github/workflows/*) ;;
+                *) continue ;; # dynamic workflows: Dependabot, CodeQL, Pages
+              esac
+              echo "Disabling $path"
+              gh api -X PUT "repos/$REPO/actions/workflows/$id/disable"
+            done

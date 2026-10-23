@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Lock old issues and PRs
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
-            const daysBeforeLock = 3;
+            const daysBeforeLock = 7;
             const lockDate = new Date();
             lockDate.setDate(lockDate.getDate() - daysBeforeLock);
             
@@ -28,7 +28,7 @@ jobs:
               /dependabot/i
             ];
             
-            // Search for closed, unlocked issues older than 3 days (paginated, oldest first)
+            // Search for closed, unlocked issues older than 7 days (paginated, oldest first)
             let page = 1;
             let totalLocked = 0;
             

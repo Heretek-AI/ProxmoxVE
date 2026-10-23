@@ -1,0 +1,6 @@
+# The root .gitignore is upstream's and ignores every json/ folder.
+!public/json/
+
+node_modules/
+.next/
+out/

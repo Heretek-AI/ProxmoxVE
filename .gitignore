@@ -35,9 +35,3 @@ vm/*.bak
 json/
 json/*.bak
 json/*.tmp
-
-# Frontend (Heretek-AI)
-node_modules/
-frontend/.next/
-frontend/out/
-!frontend/public/json/

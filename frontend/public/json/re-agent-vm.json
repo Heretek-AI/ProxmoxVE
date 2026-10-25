@@ -14,7 +14,7 @@
   "website": "https://github.com/morluto/rea",
   "logo": null,
   "config_path": "/home/analyst/.hermes",
-  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, Ghidra and radare2 MCP servers, oletools and PDF tools for documents, box-js for scripts, jadx and androguard for Android, Sigma tooling, and RE skills for triage, deobfuscation, IOCs, detections and reports, plus rea-case for evidence-backed case folders and re-ioc for CSV and STIX 2.1 IOC export, re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
+  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, Ghidra and radare2 MCP servers, oletools and PDF tools for documents, box-js for scripts, jadx and androguard for Android, Sigma tooling, and RE skills for triage, deobfuscation, IOCs, detections and reports, plus a web case console (sample intake, case pages, IOC review and report export), rea-case for evidence-backed case folders and re-ioc for CSV and STIX 2.1 IOC export, re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
   "install_methods": [
     {
       "type": "default",
@@ -42,11 +42,11 @@
       "type": "warning"
     },
     {
-      "text": "The Hermes dashboard listens on 127.0.0.1:9119. Reach it with: ssh -L 9119:127.0.0.1:9119 root@<IP>",
+      "text": "The case console (port 9120) and the Hermes dashboard (port 9119) listen on 127.0.0.1 only. Reach both with: ssh -L 9120:127.0.0.1:9120 -L 9119:127.0.0.1:9119 root@<IP>, then open http://127.0.0.1:9120",
       "type": "info"
     },
     {
-      "text": "Run 'rea-case new <sample>' to start a case in /work/cases.",
+      "text": "Start a case by dropping a sample (or a zip with password 'infected') on the case console, or with 'rea-case new <sample>' in /work/cases. The console shows the network mode, the casebook, IOCs to review and the report.",
       "type": "info"
     },
     {

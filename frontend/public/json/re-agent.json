@@ -14,7 +14,7 @@
   "website": "https://github.com/morluto/rea",
   "logo": null,
   "config_path": "/home/analyst/.hermes",
-  "description": "RE-Agent (LXC) is the static-analysis variant of the RE-Agent appliance. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
+  "description": "RE-Agent (LXC) is the static-analysis variant of the RE-Agent appliance. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders, re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
   "install_methods": [
     {
       "type": "default",
@@ -55,6 +55,10 @@
     },
     {
       "text": "Add a custom OpenAI-compatible provider with 're-agent-config provider add <name> <base_url>' (for example heretek https://llm.heretek.one/v1), and turn on memory search by meaning with 're-agent-config embeddings <base_url> <model>'. Both add the host to the egress allowlist.",
+      "type": "info"
+    },
+    {
+      "text": "After setup, take a clean baseline snapshot: pct snapshot <ctid> baseline-clean",
       "type": "info"
     }
   ]

@@ -50,7 +50,7 @@
       "type": "info"
     },
     {
-      "text": "The agent's RE skills (re-triage, re-office-pdf, re-script-deobfuscate, re-ioc-extract, re-detection-write, re-report) are in /opt/re-agent/skills. The Ghidra and radare2 MCP servers run with no network and can only open files under /work.",
+      "text": "The agent's RE skills (re-triage, re-office-pdf, re-script-deobfuscate, re-ioc-extract, re-detection-write, re-report) are in /opt/re-agent/skills. When user namespaces are available (nesting on, the LXC default), the Ghidra and radare2 MCP servers run in a bubblewrap sandbox with no network, and radare2 can only open files under /work. Without them the servers run unsandboxed and log a warning.",
       "type": "info"
     },
     {

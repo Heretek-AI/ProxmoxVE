@@ -213,12 +213,20 @@ cat <<'EOF' >/usr/local/bin/re-mcp-sandbox
 # writable, and the home directory is an empty private one (so the server
 # can't read the API keys in ~/.hermes) apart from the cached embedding model.
 # The environment is reduced to the variables below.
-# Without user namespaces (an LXC with nesting off) it runs unsandboxed.
+# Without user namespaces (an LXC with nesting off) it runs unsandboxed with a
+# warning, or refuses with --strict (used for tools that execute sample code).
+strict=0
+[[ "${1:-}" == "--strict" ]] && strict=1 && shift
 keep=()
 for var in PATH HOME USER LANG LC_ALL TERM JAVA_HOME GHIDRA_INSTALL_DIR; do
   [[ -n "${!var:-}" ]] && keep+=("$var=${!var}")
 done
 if ! bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
+  if ((strict)); then
+    echo "re-mcp-sandbox: user namespaces are unavailable, refusing to run $1 unsandboxed" >&2
+    exit 1
+  fi
+  echo "re-mcp-sandbox: user namespaces are unavailable, running $1 WITHOUT the sandbox (network and ~/.hermes are reachable)" >&2
   exec env -i "${keep[@]}" "$@"
 fi
 opts=(--unshare-all --die-with-parent --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --bind /work /work --tmpfs "$HOME")
@@ -356,7 +364,7 @@ Follow the rules in the `re-triage` skill. Never run a sample script with a real
 
 ## JScript and VBScript (box-js)
 
-`mkdir -p <case_dir>/boxjs && box-js <file> --output-dir=<case_dir>/boxjs --timeout=30`. It records URLs (`urls.json`), files it would have written (`resources/`), shell commands (`IOC.json`, `snippets.json`) and an `analysis.log`. Use `--no-kill` if it stops at an unknown ActiveX object. The emulated HTTP requests are not sent anywhere. Never pass `--download` or `--proxy`: they make box-js fetch the real payloads. Record what it captured, and triage any dropped resource as a child.
+box-js runs the script in a Node.js VM, which is not a security boundary, so it always runs inside the sandbox, and the script must be under /work (copy it into `<case_dir>/children/` first): `mkdir -p <case_dir>/boxjs && re-mcp-sandbox --strict box-js <file> --output-dir=<case_dir>/boxjs --timeout=30`. If the sandbox is unavailable, `--strict` refuses to run it; deobfuscate statically instead. It records URLs (`urls.json`), files it would have written (`resources/`), shell commands (`IOC.json`, `snippets.json`) and an `analysis.log`. Use `--no-kill` if it stops at an unknown ActiveX object. The emulated HTTP requests are not sent anywhere. Never pass `--download` or `--proxy`: they make box-js fetch the real payloads. Record what it captured, and triage any dropped resource as a child.
 
 ## PowerShell
 
@@ -649,17 +657,25 @@ new)
   mkdir -p "$CASE_DIR/children" "$CASE_DIR/rules"
   echo "==> [2/5] Initializing casebook"
   re-casebook init "$CASE_DIR" "$SAMPLE"
+  # The parsers below read hostile input, so they run in the sandbox (no
+  # network, no view of ~/.hermes) when the sample is under /work.
+  if [[ "$(realpath "$SAMPLE")" == /work/* ]]; then
+    SANDBOX=(re-mcp-sandbox)
+  else
+    SANDBOX=()
+    echo "    Note: $SAMPLE is outside /work, so the parsers run unsandboxed. Keep samples in /work/samples."
+  fi
   echo "==> [3/5] Detect It Easy"
   if command -v diec >/dev/null; then
-    diec "$SAMPLE" >"$CASE_DIR/die.txt" 2>&1 || echo "    diec reported an error, see die.txt"
+    "${SANDBOX[@]}" diec "$SAMPLE" >"$CASE_DIR/die.txt" 2>&1 || echo "    diec reported an error, see die.txt"
   else
     echo "Detect It Easy is not installed" >"$CASE_DIR/die.txt"
   fi
   echo "==> [4/5] CAPA and FLOSS"
-  capa -q "$SAMPLE" >"$CASE_DIR/capa_triage.txt" 2>&1 || echo "    capa reported an error, see capa_triage.txt"
+  "${SANDBOX[@]}" capa -q "$SAMPLE" >"$CASE_DIR/capa_triage.txt" 2>&1 || echo "    capa reported an error, see capa_triage.txt"
   # FLOSS handles PE files only; plain ASCII and UTF-16 strings cover the rest.
   { strings -a -n 6 "$SAMPLE"; strings -a -n 6 -el "$SAMPLE"; } >"$CASE_DIR/strings.txt"
-  floss --quiet "$SAMPLE" >"$CASE_DIR/floss_strings.txt" 2>&1 || echo "    floss reported an error, see floss_strings.txt"
+  "${SANDBOX[@]}" floss --quiet "$SAMPLE" >"$CASE_DIR/floss_strings.txt" 2>&1 || echo "    floss reported an error, see floss_strings.txt"
   echo "==> [5/5] Writing investigation plan"
   cat <<EOF >"$CASE_DIR/investigation_plan.md"
 # Investigation Plan: $(basename "$SAMPLE")

@@ -55,8 +55,12 @@ fetch_and_deploy_gh_release "radare2" "radareorg/radare2" "binary" "latest" "" "
 
 # Detect It Easy publishes a .deb per distribution release (die_<ver>_Debian_13_amd64.deb);
 # apt pulls in the Qt 5 libraries it needs.
+# The helper falls back to any .deb when the pattern misses, so check that a
+# package for this distro exists before calling it.
 DIE_DISTRO=$(. /etc/os-release && echo "${ID^}_${VERSION_ID}")
-if ! fetch_and_deploy_gh_release "die" "horsicq/DIE-engine" "binary" "latest" "" "die_*_${DIE_DISTRO}_amd64.deb" ||
+if ! curl -fsSL https://api.github.com/repos/horsicq/DIE-engine/releases/latest |
+  jq -e --arg s "_${DIE_DISTRO}_amd64.deb" 'any(.assets[].name; endswith($s))' >/dev/null ||
+  ! fetch_and_deploy_gh_release "die" "horsicq/DIE-engine" "binary" "latest" "" "die_*_${DIE_DISTRO}_amd64.deb" ||
   ! diec --version >/dev/null 2>&1; then
   msg_warn "Detect It Easy could not be installed; the rest of the toolchain is unaffected"
 fi

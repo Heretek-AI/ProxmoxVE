@@ -43,7 +43,9 @@ function update_script() {
   fi
 
   DIE_DISTRO=$(. /etc/os-release && echo "${ID^}_${VERSION_ID}")
-  if check_for_gh_release "die" "horsicq/DIE-engine"; then
+  if check_for_gh_release "die" "horsicq/DIE-engine" &&
+    curl -fsSL https://api.github.com/repos/horsicq/DIE-engine/releases/latest |
+    jq -e --arg s "_${DIE_DISTRO}_amd64.deb" 'any(.assets[].name; endswith($s))' >/dev/null; then
     fetch_and_deploy_gh_release "die" "horsicq/DIE-engine" "binary" "latest" "" "die_*_${DIE_DISTRO}_amd64.deb"
   fi
 

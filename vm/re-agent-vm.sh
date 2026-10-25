@@ -135,10 +135,12 @@ show_app_vm_summary
 
 echo -e "${INFO}${YW} Configure Hermes inside the VM:${CL}"
 echo -e "${TAB}${BGN}re-agent-setup${CL}"
+echo -e "${INFO}${YW} Add a custom provider or a memory embeddings API, and let it through the quarantine:${CL}"
+echo -e "${TAB}${BGN}re-agent-config provider add <name> <base_url>${CL}"
 echo -e "${INFO}${YW} The Hermes dashboard listens on localhost only. Reach it through an SSH tunnel:${CL}"
 echo -e "${TAB}${BGN}ssh -L 9119:127.0.0.1:9119 root@${VM_IP:-<IP>}${CL}"
 echo -e "${INFO}${YW} Before running samples, quarantine egress and take a baseline snapshot:${CL}"
-echo -e "${TAB}${BGN}re-firewall isolate <proxy_ip> [port]${CL}"
+echo -e "${TAB}${BGN}re-firewall isolate local${CL}"
 echo -e "${TAB}${BGN}qm snapshot ${VMID} baseline-clean${CL}"
 
 post_update_to_api "done" "none"

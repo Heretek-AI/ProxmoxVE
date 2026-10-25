@@ -49,6 +49,7 @@ function update_script() {
     $STD setsid --wait bash -c '
       set -a; source /etc/default/re-agent; set +a
       /home/analyst/.local/bin/hermes update --yes
+      /home/analyst/.local/bin/hermes plugins update --yes
     '
     chown -R analyst:analyst /home/analyst
     systemctl start hermes-dashboard
@@ -67,6 +68,8 @@ echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
 echo -e "${INFO}${RD} This LXC shares the Proxmox host kernel. Use it for static analysis only; run samples in the RE-Agent VM.${CL}"
 echo -e "${INFO}${YW} Configure Hermes inside the container:${CL}"
 echo -e "${TAB}${BGN}re-agent-setup${CL}"
+echo -e "${INFO}${YW} Add a custom provider or a memory embeddings API, and let it through the quarantine:${CL}"
+echo -e "${TAB}${BGN}re-agent-config provider add <name> <base_url>${CL}"
 echo -e "${INFO}${YW} The Hermes dashboard listens on localhost only. Reach it through an SSH tunnel:${CL}"
 echo -e "${TAB}${BGN}ssh -L 9119:127.0.0.1:9119 root@${IP}${CL}"
 echo -e "${INFO}${YW} Start a case with:${CL}"

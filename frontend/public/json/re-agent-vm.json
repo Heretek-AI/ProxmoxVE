@@ -14,7 +14,7 @@
   "website": "https://github.com/morluto/rea",
   "logo": null,
   "config_path": "/home/analyst/.hermes",
-  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders and re-firewall to restrict egress to an LLM proxy.",
+  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
   "install_methods": [
     {
       "type": "default",
@@ -46,8 +46,12 @@
       "type": "info"
     },
     {
-      "text": "Run 're-firewall isolate <proxy_ip> [port]' as root before handling samples. It blocks all egress except the analyst user to your proxy, blocks IPv6, and persists across reboots. A Squid template is in /opt/re-agent/host-egress-proxy.conf.",
+      "text": "Run 're-firewall isolate local' as root before handling samples (or 'isolate <proxy_ip> [port]' to use a proxy on the host). Only allowlisted LLM hosts stay reachable, IPv6 is blocked, and it persists across reboots.",
       "type": "warning"
+    },
+    {
+      "text": "Add a custom OpenAI-compatible provider with 're-agent-config provider add <name> <base_url>' (for example heretek https://llm.heretek.one/v1), and turn on memory search by meaning with 're-agent-config embeddings <base_url> <model>'. Both add the host to the egress allowlist.",
+      "type": "info"
     },
     {
       "text": "After setup, take a clean baseline snapshot: qm snapshot <vmid> baseline-clean",

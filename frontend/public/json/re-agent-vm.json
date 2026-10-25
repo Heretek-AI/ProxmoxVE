@@ -38,6 +38,10 @@
       "type": "info"
     },
     {
+      "text": "SSH accepts keys only. Add your public key to /root/.ssh/authorized_keys from the VM console, or through cloud-init.",
+      "type": "warning"
+    },
+    {
       "text": "The Hermes dashboard listens on 127.0.0.1:9119. Reach it with: ssh -L 9119:127.0.0.1:9119 root@<IP>",
       "type": "info"
     },
@@ -48,6 +52,10 @@
     {
       "text": "Run 're-firewall isolate local' as root before handling samples (or 'isolate <proxy_ip> [port]' to use a proxy on the host). Only allowlisted LLM hosts stay reachable, IPv6 is blocked, and it persists across reboots.",
       "type": "warning"
+    },
+    {
+      "text": "Installing, updating or disabling Hermes plugins, and running 'update', need the internet: run 're-firewall unmask' first and 're-firewall isolate local' afterwards.",
+      "type": "info"
     },
     {
       "text": "Add a custom OpenAI-compatible provider with 're-agent-config provider add <name> <base_url>' (for example heretek https://llm.heretek.one/v1), and turn on memory search by meaning with 're-agent-config embeddings <base_url> <model>'. Both add the host to the egress allowlist.",

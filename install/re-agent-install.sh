@@ -212,15 +212,37 @@ cat <<'EOF' >/usr/local/bin/re-mcp-sandbox
 # Runs an MCP server with no network. The system is read-only, /work is
 # writable, and the home directory is an empty private one (so the server
 # can't read the API keys in ~/.hermes) apart from the cached embedding model.
+# The environment is reduced to the variables below.
 # Without user namespaces (an LXC with nesting off) it runs unsandboxed.
+keep=()
+for var in PATH HOME USER LANG LC_ALL TERM JAVA_HOME GHIDRA_INSTALL_DIR; do
+  [[ -n "${!var:-}" ]] && keep+=("$var=${!var}")
+done
 if ! bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc true 2>/dev/null; then
-  exec "$@"
+  exec env -i "${keep[@]}" "$@"
 fi
 opts=(--unshare-all --die-with-parent --ro-bind / / --dev /dev --proc /proc --tmpfs /tmp --bind /work /work --tmpfs "$HOME")
 [[ -d "$HOME/.cache/chroma" ]] && opts+=(--ro-bind "$HOME/.cache/chroma" "$HOME/.cache/chroma")
-exec bwrap "${opts[@]}" -- "$@"
+exec env -i "${keep[@]}" bwrap "${opts[@]}" -- "$@"
 EOF
 chmod 755 /usr/local/bin/re-mcp-sandbox
+cat <<'EOF' >/usr/local/bin/re-ghidra-mcp
+#!/usr/bin/env bash
+# Hermes starts a Ghidra MCP server in each of its processes (dashboard,
+# gateway, CLI chats), and a Ghidra project opens in one process at a time.
+# Each server takes the first free project slot and holds its lock while it runs.
+for n in 1 2 3 4; do
+  exec {fd}>"/work/ghidra/slot${n}.lock"
+  if flock -n "$fd"; then
+    exec /opt/ghidra-mcp-venv/bin/pyghidra-mcp --transport stdio --project-path /work/ghidra \
+      --project-name "re-agent-${n}" --no-symbols "$@"
+  fi
+  exec {fd}>&-
+done
+echo "re-ghidra-mcp: all four Ghidra project slots are in use" >&2
+exit 1
+EOF
+chmod 755 /usr/local/bin/re-ghidra-mcp
 # Skills live outside ~/.hermes and belong to root, so the agent can read them
 # but can't rewrite them.
 mkdir -p /opt/re-agent/skills/re-triage
@@ -302,7 +324,7 @@ Follow the rules in the `re-triage` skill: never open the document in an applica
 
 1. `qpdf --check <file>` for structure, then `qpdf --qdf --object-streams=disable <file> <case_dir>/children/expanded.pdf` to get an uncompressed copy.
 2. `dumppdf.py -a <file>` lists every object; look for `/JavaScript`, `/JS`, `/OpenAction`, `/AA`, `/Launch`, `/EmbeddedFile`, `/URI`, `/SubmitForm`, `/XFA`.
-3. `dumppdf.py -b -i <obj> <file> > children/obj<obj>.bin` extracts a stream. Hand JavaScript to the `re-script-deobfuscate` skill.
+3. `dumppdf.py -b -i <obj> <file> > <case_dir>/children/obj<obj>.bin` extracts a stream. Hand JavaScript to the `re-script-deobfuscate` skill.
 4. `pdftotext <file> -` and `pdfimages -list <file>` for lure text and images (phishing lures often carry the link in an image).
 
 ## Finish
@@ -425,7 +447,7 @@ metadata:
 
 1. Check that every finding you plan to state is in `verified_claims` (`rea-case status <sample>`). Verify any that are missing with `re-casebook verify`; drop findings you can't support.
 2. `re-ioc export <case_dir>` so the IOC files are current.
-3. `rea-case export <sample>` writes `FINAL_REPORT.md` with the verified claims and the confirmed IOCs. Then edit it to add, in this order:
+3. Write the narrative in `<case_dir>/report_notes.md`, never in `FINAL_REPORT.md`: `rea-case export` rebuilds that file every time from the notes, the investigation plan, the verified claims and the confirmed IOCs. Put these sections in the notes, in this order:
    - **Summary**: verdict (malicious, suspicious, benign, unknown), family if identified and how confidently, and what the sample does in two or three sentences.
    - **Sample**: hashes, type, size, packer, compiler.
    - **Behaviour**: execution chain, persistence, C2 and protocol, payloads. Cite evidence ids in brackets after each statement.
@@ -433,7 +455,8 @@ metadata:
    - **IOCs**: point to `iocs.csv` and `iocs.stix.json`, and list the key ones defanged.
    - **Detections**: the rules in `rules/` and how they tested.
    - **Gaps**: what was not analysed and why (packed layer not unpacked, no .NET decompiler, not detonated).
-4. Defang every URL, domain and IP in the report (`hxxp`, `[.]`).
+4. Defang every URL, domain and IP in the notes (`hxxp`, `[.]`).
+5. Run `rea-case export <sample>` and read `FINAL_REPORT.md` back to check it.
 SKILL
 chmod -R a+rX,go-w /opt/re-agent/skills
 hermes_set() {
@@ -442,7 +465,7 @@ hermes_set() {
 }
 hermes_set mcp_servers.radare2 '{"command":"/usr/local/bin/re-mcp-sandbox","args":["/usr/local/bin/r2mcp","-s","/work","-g","all"],"timeout":300}' ||
   msg_warn "Could not register the radare2 MCP server"
-hermes_set mcp_servers.ghidra '{"command":"/usr/local/bin/re-mcp-sandbox","args":["/opt/ghidra-mcp-venv/bin/pyghidra-mcp","--transport","stdio","--project-path","/work/ghidra","--project-name","re-agent","--no-symbols"],"env":{"GHIDRA_INSTALL_DIR":"/opt/ghidra"},"timeout":900,"connect_timeout":180}' ||
+hermes_set mcp_servers.ghidra '{"command":"/usr/local/bin/re-mcp-sandbox","args":["/usr/local/bin/re-ghidra-mcp"],"env":{"GHIDRA_INSTALL_DIR":"/opt/ghidra"},"timeout":900,"connect_timeout":180}' ||
   msg_warn "Could not register the Ghidra MCP server"
 hermes_set skills.external_dirs '["/opt/re-agent/skills"]' || msg_warn "Could not register the RE skills"
 chown -R analyst:analyst /home/analyst
@@ -600,9 +623,15 @@ new)
     echo "Error: sample not found: $SAMPLE"
     exit 1
   }
+  SHA256=$(sha256sum "$SAMPLE" | awk '{print $1}')
+  # Re-running on the same sample keeps the case; a different file with the
+  # same name would inherit the old evidence and IOCs.
+  if [[ -f "$CASE_DIR/metadata.json" ]] && [[ "$(jq -r .sha256 "$CASE_DIR/metadata.json")" != "$SHA256" ]]; then
+    echo "Error: $CASE_DIR belongs to a different sample with the same name. Rename the file and try again."
+    exit 1
+  fi
   mkdir -p "$CASE_DIR"
   echo "==> [1/5] Hashing"
-  SHA256=$(sha256sum "$SAMPLE" | awk '{print $1}')
   FILE_TYPE=$(file -b "$SAMPLE")
   jq -n \
     --arg name "$(basename "$SAMPLE")" \
@@ -666,6 +695,10 @@ export)
     echo "# Technical Report: $(basename "$SAMPLE")"
     echo "Generated: $(date)"
     echo
+    if [[ -f "$CASE_DIR/report_notes.md" ]]; then
+      cat "$CASE_DIR/report_notes.md"
+      echo
+    fi
     cat "$CASE_DIR/investigation_plan.md"
     echo
     echo "## Verified Claims"
@@ -677,7 +710,7 @@ export)
       echo "| Type | Value | Evidence |"
       echo "| --- | --- | --- |"
       jq -r '.iocs[] | select(.status == "confirmed")
-        | (if (.type | IN("url", "domain", "ipv4", "email")) then (.value | sub("^http"; "hxxp") | gsub("\\."; "[.]")) else .value end) as $v
+        | (if (.type | IN("url", "domain", "ipv4", "email")) then (.value | sub("^http"; "hxxp"; "i") | gsub("\\."; "[.]")) else .value end) as $v
         | "| \(.type) | `\($v)` | \(.evidence_ids | join(", ")) |"' "$CASE_DIR/iocs.json"
     fi
   } >"$CASE_DIR/FINAL_REPORT.md"
@@ -709,15 +742,22 @@ text output; nothing leaves the candidate state until it is confirmed with an
 evidence id that the casebook knows, and only confirmed IOCs are exported."""
 import argparse
 import csv
+import fcntl
 import ipaddress
 import json
 import os
 import re
 import sys
 import time
+import uuid
 
-TEXT_SUFFIXES = (".txt", ".json", ".log", ".md", ".js", ".ps1", ".vbs", ".bat", ".xml", ".html")
-SKIP_FILES = {"iocs.json", "metadata.json", "FINAL_REPORT.md", "iocs.csv", "iocs.stix.json"}
+TEXT_SUFFIXES = (
+    ".txt", ".json", ".log", ".md", ".js", ".jse", ".ps1", ".psm1", ".vbs", ".vbe", ".vba", ".bas", ".bat",
+    ".cmd", ".hta", ".wsf", ".xml", ".html", ".htm", ".java", ".smali", ".kt", ".cs", ".c", ".py", ".sh",
+)
+SKIP_FILES = {"iocs.json", "metadata.json", "FINAL_REPORT.md", "iocs.csv", "iocs.stix.json", "iocs.lock"}
+# Fixed namespace so a case's STIX ids stay the same from one export to the next.
+STIX_NS = uuid.UUID("5d1e7c1a-6f3b-4c55-9a43-3f0e3f6b2d10")
 MAX_BYTES = 20 * 1024 * 1024
 
 # Strings and scripts are full of dotted names (kernel32.dll, Date.now), so a
@@ -762,9 +802,26 @@ def refang(text):
     )
 
 
+def canonical(kind, value):
+    """The form an IOC is keyed on: case-insensitive types fold to lower case,
+    and a URL's scheme and host do (its path stays as written)."""
+    if kind in ("domain", "email", "registry", "md5", "sha1", "sha256"):
+        return value.lower()
+    if kind == "url":
+        m = re.match(r"([a-z]+://)([^/?#]*)(.*)", value, re.I | re.S)
+        return (m.group(1) + m.group(2)).lower() + m.group(3) if m else value
+    return value
+
+
+def valid(kind, value):
+    if kind == "ipv4":
+        return _is_ip(value)
+    return PATTERNS[kind].fullmatch(value) is not None
+
+
 def defang(kind, value):
     if kind in ("url", "domain", "ipv4", "email"):
-        return value.replace("http", "hxxp", 1).replace(".", "[.]")
+        return re.sub(r"^http", "hxxp", value, flags=re.I).replace(".", "[.]")
     return value
 
 
@@ -788,10 +845,11 @@ def candidates(text):
         for m in PATTERNS[kind].finditer(text):
             value = m.group(0).rstrip(".,;:)]}'\"")
             if kind == "url":
+                # The URL is always kept: malware also stages payloads on
+                # well-known hosts. Only the host of such a URL isn't added.
                 host = re.sub(r"^[a-z]+://", "", value, flags=re.I).split("/")[0].split(":")[0].split("@")[-1].lower()
-                if _benign(host):
-                    continue
-                found.setdefault(("ipv4" if _is_ip(host) else "domain", host), True)
+                if not _benign(host):
+                    found.setdefault(("ipv4" if _is_ip(host) else "domain", host), True)
             elif kind == "domain":
                 value = value.lower()
                 # A leading dot means a section or member name (.data.rel.ro).
@@ -802,8 +860,12 @@ def candidates(text):
                 if _benign(value.split("@", 1)[1]):
                     continue
             elif kind == "ipv4":
-                ip = ipaddress.ip_address(value)
-                if ip.is_unspecified or ip.is_loopback or ip.is_multicast or str(ip).endswith(".255"):
+                # Octets with leading zeros (010.0.0.1) are not valid addresses.
+                try:
+                    ip = ipaddress.ip_address(value)
+                except ValueError:
+                    continue
+                if ip.is_unspecified or ip.is_loopback or ip.is_multicast or value == "255.255.255.255":
                     continue
             elif kind in ("md5", "sha1", "sha256"):
                 value = value.lower()
@@ -843,7 +905,21 @@ def _save(case_dir, data):
 
 
 def _key(kind, value):
-    return f"{kind}:{value}"
+    return f"{kind}:{canonical(kind, value)}"
+
+
+class _Locked:
+    """Holds the case's IOC lock, so overlapping re-ioc runs don't lose updates."""
+
+    def __init__(self, case_dir):
+        self.path = os.path.join(case_dir, "iocs.lock")
+
+    def __enter__(self):
+        self.f = open(self.path, "w")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+
+    def __exit__(self, *exc):
+        self.f.close()
 
 
 def _sample_hashes(case_dir):
@@ -868,7 +944,7 @@ def cmd_extract(args):
                 text = f.read()
             rel = os.path.relpath(path, args.case_dir)
             for kind, value in candidates(text):
-                if value in own:
+                if canonical(kind, value) in own:
                     continue
                 entry = data["iocs"].get(_key(kind, value))
                 if entry is None:
@@ -885,20 +961,24 @@ def cmd_extract(args):
 
 def cmd_add(args):
     data = _load(args.case_dir)
-    value = refang(args.value)
-    if args.type not in PATTERNS:
-        sys.exit(f"[ERROR] Unknown type {args.type}; use one of {', '.join(PATTERNS)}")
-    data["iocs"].setdefault(_key(args.type, value), {
+    value = refang(args.value.strip())
+    if not valid(args.type, value):
+        sys.exit(f"[REJECTED] Not a valid {args.type}: {args.value}")
+    key = _key(args.type, value)
+    if key in data["iocs"]:
+        print(f"[IOC] Already listed as {data['iocs'][key]['status']}: {args.type} {defang(args.type, value)}")
+        return
+    data["iocs"][key] = {
         "type": args.type, "value": value, "status": "candidate", "sources": ["manual"],
         "evidence_ids": [], "first_seen": time.time(),
-    })
+    }
     _save(args.case_dir, data)
     print(f"[IOC] Added candidate {args.type} {defang(args.type, value)}")
 
 
 def _find(data, value):
-    value = refang(value)
-    hits = [k for k, v in data["iocs"].items() if v["value"] == value or k == value]
+    value = refang(value.strip())
+    hits = [k for k, v in data["iocs"].items() if k in (value, _key(v["type"], value))]
     if not hits:
         sys.exit(f"[ERROR] No IOC with value {value}")
     return hits
@@ -971,6 +1051,7 @@ def cmd_export(args):
     for v in rows:
         esc = v["value"].replace("\\", "\\\\").replace("'", "\\'")
         objects.append(stix2.Indicator(
+            id=f"indicator--{uuid.uuid5(STIX_NS, name + '/' + _key(v['type'], v['value']))}",
             name=f"{v['type']} {defang(v['type'], v['value'])}",
             pattern=STIX_PATTERN[v["type"]].format(esc),
             pattern_type="stix",
@@ -980,6 +1061,7 @@ def cmd_export(args):
         ))
     if objects:
         objects.append(stix2.Report(
+            id=f"report--{uuid.uuid5(STIX_NS, name)}",
             name=f"RE-Agent case {name}", published=stix2.utils.get_timestamp(),
             report_types=["malware"], object_refs=[o.id for o in objects],
         ))
@@ -1016,7 +1098,10 @@ def main():
     s.add_argument("--all", action="store_true", help="include candidates")
     s.set_defaults(func=cmd_export)
     args = p.parse_args()
-    args.func(args)
+    if not os.path.isdir(args.case_dir):
+        sys.exit(f"[ERROR] Case directory not found: {args.case_dir}")
+    with _Locked(args.case_dir):
+        args.func(args)
 
 
 if __name__ == "__main__":

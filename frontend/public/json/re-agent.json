@@ -6,59 +6,52 @@
     20
   ],
   "date_created": "2026-10-24",
-  "type": "vm",
+  "type": "ct",
   "updateable": true,
   "privileged": false,
-  "interface_port": 9119,
-  "documentation": "https://github.com/alexmi256/rea-agent-docker",
+  "interface_port": null,
+  "documentation": "https://github.com/morluto/rea/blob/main/docs/installation.md",
   "website": "https://github.com/morluto/rea",
   "logo": null,
-  "config_path": "/work/cases",
-  "description": "RE-Agent is an automated, turnkey agentic reverse-engineering and malware analysis appliance. Features hardware QEMU/KVM virtualization, Hermes Agent with the official REA plugin, OpenBin BINNY RE harness, Ghidra 11.2+ headless, REA-Casebook for verified evidence tracking (zero-hallucination stateless case machine), static triage tools (CAPA, FLOSS, YARA, DIEC, Radare2), and a 4-layer whitelisted LLM egress firewall for safe isolated execution.",
+  "config_path": "/home/analyst/.hermes",
+  "description": "RE-Agent (LXC) is the static-analysis variant of the RE-Agent appliance. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders and re-firewall to restrict egress to an LLM proxy.",
   "install_methods": [
     {
-      "type": "vm",
-      "script": "vm/re-agent-vm.sh",
-      "resources": {
-        "cpu": 4,
-        "ram": 8192,
-        "hdd": 40,
-        "os": "Debian",
-        "version": "13"
-      }
-    },
-    {
-      "type": "ct",
+      "type": "default",
       "script": "ct/re-agent.sh",
       "resources": {
         "cpu": 4,
         "ram": 8192,
         "hdd": 40,
-        "os": "Debian",
+        "os": "debian",
         "version": "13"
       }
     }
   ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
   "notes": [
     {
-      "text": "Access the Hermes Agent Web Dashboard at http://<IP>:9119",
+      "text": "The LXC shares the Proxmox host kernel. Use it for static analysis only, and run or detonate samples in the RE-Agent VM.",
+      "type": "danger"
+    },
+    {
+      "text": "Run 're-agent-setup' inside the guest to configure your model provider and start the Hermes gateway API on port 8642 (key in /home/analyst/.hermes/.env).",
       "type": "info"
     },
     {
-      "text": "Hermes Gateway API running on port 8642",
+      "text": "The Hermes dashboard listens on 127.0.0.1:9119. Reach it with: ssh -L 9119:127.0.0.1:9119 root@<IP>",
       "type": "info"
     },
     {
-      "text": "Run 'rea-case new <sample_path>' inside the appliance to initiate an automated stateless triage and investigation",
+      "text": "Run 'rea-case new <sample>' to start a case in /work/cases.",
       "type": "info"
     },
     {
-      "text": "Run 're-firewall isolate <proxy_ip>' to engage strict network quarantine with whitelisted LLM egress only",
+      "text": "Run 're-firewall isolate <proxy_ip> [port]' as root before handling samples. It blocks all egress except the analyst user to your proxy, blocks IPv6, and persists across reboots. A Squid template is in /opt/re-agent/host-egress-proxy.conf.",
       "type": "warning"
-    },
-    {
-      "text": "Create a pristine baseline snapshot after initial boot: qm snapshot <vmid> baseline-clean",
-      "type": "info"
     }
   ]
 }

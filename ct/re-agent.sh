@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-
-# Copyright (c) 2021-2026 community-scripts ORG
-# Author: Derek & community contributors
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-# Source: https://github.com/alexmi256/rea-agent-docker | https://github.com/morluto/rea | https://github.com/openbin-ai/binny
-
-COMMUNITY_SCRIPTS_URL="${COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main}"
+COMMUNITY_SCRIPTS_URL="${COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/Heretek-AI/ProxmoxVE/refs/heads/main}"
 _cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
 source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
+# Author: BillyOutlast
+# License: MIT | https://github.com/Heretek-AI/ProxmoxVE/raw/main/LICENSE
+# Source: https://github.com/morluto/rea | https://github.com/openbin-ai/binny | https://hermes-agent.nousresearch.com/
 
 APP="RE-Agent"
 var_tags="${var_tags:-ai;malware;reverse-engineering;security;agent}"
@@ -30,25 +27,33 @@ function update_script() {
 
   if [[ ! -d /opt/ghidra ]]; then
     msg_error "No ${APP} Installation Found!"
-    exit 1
+    exit
   fi
 
-  msg_info "Updating base packages"
-  apt_update_safe
-  $STD apt upgrade -y
-  msg_ok "Base system updated"
+  if check_for_gh_release "ghidra" "NationalSecurityAgency/ghidra"; then
+    CLEAN_INSTALL=1 fetch_and_deploy_gh_release "ghidra" "NationalSecurityAgency/ghidra" "prebuild" "latest" "/opt/ghidra" "ghidra_*_PUBLIC_*.zip"
+  fi
 
-  msg_info "Updating REA agents & MCP tools"
-  $STD npm update -g rea-agents supergateway
-  msg_ok "Updated REA tools"
+  if check_for_gh_release "binny" "openbin-ai/binny-releases"; then
+    CLEAN_INSTALL=1 fetch_and_deploy_gh_release "binny" "openbin-ai/binny-releases" "prebuild" "latest" "/opt/binny" "binny-linux-amd64.tar.gz"
+  fi
 
-  msg_info "Updating Hermes Agent"
+  msg_info "Updating REA and triage tools"
+  $STD npm update -g rea-agents
+  $STD /opt/re-tools-venv/bin/pip install --upgrade flare-capa flare-floss yara-python pefile pyelftools r2pipe
+  msg_ok "Updated REA and triage tools"
+
   if [[ -x /home/analyst/.local/bin/hermes ]]; then
-    su - analyst -c '/home/analyst/.local/bin/hermes update --yes' >/dev/null 2>&1 || true
-    systemctl restart hermes-dashboard hermes-gateway 2>/dev/null || true
+    msg_info "Updating Hermes Agent"
+    systemctl stop hermes-dashboard
+    $STD setsid --wait bash -c '
+      set -a; source /etc/default/re-agent; set +a
+      /home/analyst/.local/bin/hermes update --yes
+    '
+    chown -R analyst:analyst /home/analyst
+    systemctl start hermes-dashboard
+    msg_ok "Updated Hermes Agent"
   fi
-  msg_ok "Updated Hermes Agent"
-
   msg_ok "Updated successfully!"
   exit
 }
@@ -59,8 +64,10 @@ description
 
 msg_ok "Completed Successfully!\n"
 echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${INFO}${YW} Access the Hermes Web Dashboard:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:9119${CL}"
-echo -e "${INFO}${YW} Hermes Gateway API: ${BGN}http://${IP}:8642${CL}"
-echo -e "${INFO}${YW} Workspace directory: ${BGN}/work/cases${CL}"
-echo -e "${TAB}${GN}💡 Use 'rea-case new <sample>' to start a stateless investigation.${CL}"
+echo -e "${INFO}${RD} This LXC shares the Proxmox host kernel. Use it for static analysis only; run samples in the RE-Agent VM.${CL}"
+echo -e "${INFO}${YW} Configure Hermes inside the container:${CL}"
+echo -e "${TAB}${BGN}re-agent-setup${CL}"
+echo -e "${INFO}${YW} The Hermes dashboard listens on localhost only. Reach it through an SSH tunnel:${CL}"
+echo -e "${TAB}${BGN}ssh -L 9119:127.0.0.1:9119 root@${IP}${CL}"
+echo -e "${INFO}${YW} Start a case with:${CL}"
+echo -e "${TAB}${BGN}rea-case new <sample>${CL}"

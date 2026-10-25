@@ -717,6 +717,8 @@ export)
     echo "Generated: $(date)"
     if [[ -f "$CASE_DIR/case.json" ]]; then
       jq -r '"Verdict: **\(.verdict // "unknown")**" + (if (.family // "") != "" then " (\(.family))" else "" end)' "$CASE_DIR/case.json"
+    else
+      echo "Verdict: **unknown**"
     fi
     echo
     if [[ -f "$CASE_DIR/report_notes.md" ]]; then
@@ -737,7 +739,9 @@ export)
         | (if (.type | IN("url", "domain", "ipv4", "email")) then (.value | sub("^http"; "hxxp"; "i") | gsub("\\."; "[.]")) else .value end) as $v
         | "| \(.type) | `\($v)` | \(.evidence_ids | join(", ")) |"' "$CASE_DIR/iocs.json"
     fi
-  } >"$CASE_DIR/FINAL_REPORT.md"
+  } >"$CASE_DIR/FINAL_REPORT.md.tmp"
+  # Replaced only once complete, so a failed export never leaves half a report.
+  mv "$CASE_DIR/FINAL_REPORT.md.tmp" "$CASE_DIR/FINAL_REPORT.md"
   echo "Report written to $CASE_DIR/FINAL_REPORT.md"
   ;;
 iocs)
@@ -756,9 +760,13 @@ verdict)
     ;;
   esac
   STATE_FILE="$CASE_DIR/case.json"
+  # The case console takes the same lock for its edits.
+  exec 9>>"$STATE_FILE.lock"
+  flock 9
   [[ -f "$STATE_FILE" ]] || echo '{"status": "open", "verdict": "unknown", "family": "", "notes": ""}' >"$STATE_FILE"
   jq --arg v "$VERDICT" --arg f "${4:-}" '.verdict = $v | if $f != "" then .family = $f else . end' "$STATE_FILE" >"$STATE_FILE.$$.tmp"
   mv "$STATE_FILE.$$.tmp" "$STATE_FILE"
+  exec 9>&-
   echo "Verdict for $(basename "$CASE_DIR"): $VERDICT${4:+ ($4)}"
   ;;
 list)
@@ -1081,11 +1089,12 @@ def cmd_export(args):
     rows = _selected(data, args.all)
     name = os.path.basename(os.path.normpath(args.case_dir))
     out = os.path.join(args.case_dir, "iocs.csv")
-    with open(out, "w", newline="") as f:
+    with open(out + ".tmp", "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["type", "value", "defanged", "status", "evidence_ids", "sources"])
         for v in rows:
             w.writerow([v["type"], v["value"], defang(v["type"], v["value"]), v["status"], " ".join(v["evidence_ids"]), " ".join(v["sources"])])
+    os.replace(out + ".tmp", out)
     print(f"[IOC] Wrote {len(rows)} rows to {out}")
 
     objects = []
@@ -1107,8 +1116,10 @@ def cmd_export(args):
             report_types=["malware"], object_refs=[o.id for o in objects],
         ))
     out = os.path.join(args.case_dir, "iocs.stix.json")
-    with open(out, "w") as f:
-        f.write(stix2.Bundle(objects=objects).serialize(pretty=True))
+    bundle = stix2.Bundle(objects=objects).serialize(pretty=True)
+    with open(out + ".tmp", "w") as f:
+        f.write(bundle)
+    os.replace(out + ".tmp", out)
     print(f"[IOC] Wrote STIX 2.1 bundle with {len(rows)} indicators to {out}")
 
 
@@ -1274,7 +1285,9 @@ apply_rules() {
   iptables -I OUTPUT 1 -j "$CHAIN"
 
   # IPv6 has no proxy path, so everything but loopback and replies is dropped.
+  local v6=open
   if command -v ip6tables >/dev/null 2>&1; then
+    v6=blocked
     ip6tables -N "$CHAIN"
     ip6tables -A "$CHAIN" -o lo -j ACCEPT
     ip6tables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
@@ -1299,6 +1312,9 @@ apply_rules() {
     fi
   fi
   printf 'HTTPS_PROXY=%s\nHTTP_PROXY=%s\nhttps_proxy=%s\nhttp_proxy=%s\nNO_PROXY=127.0.0.1,localhost\nno_proxy=127.0.0.1,localhost\n' "$url" "$url" "$url" "$url" >"$PROXY_ENV"
+  # Read by the case console: proof the rules applied since boot (/run is a tmpfs).
+  mkdir -p /run/re-agent
+  printf 'APPLIED=%s\nIPV6=%s\n' "$(date +%s)" "$v6" >/run/re-agent/firewall.applied
 }
 
 restart_hermes() {
@@ -1332,6 +1348,7 @@ isolate)
   ;;
 unmask)
   echo "MODE=open" >"$STATE"
+  rm -f /run/re-agent/firewall.applied
   flush_chain iptables
   flush_chain ip6tables
   systemctl disable -q --now squid 2>/dev/null || true
@@ -1521,6 +1538,7 @@ re-ioc), so the console and the CLI never disagree. The one file it writes
 itself is case.json, the verdict and status that `rea-case verdict` also sets.
 It never sends a sample's bytes to the browser: binary files are shown as a
 hex dump and text is returned as JSON for the page to show as plain text."""
+import fcntl
 import hashlib
 import json
 import os
@@ -1547,6 +1565,7 @@ STATE = WORK / ".console"
 JOBS_DIR = STATE / "jobs"
 INCOMING = STATE / "incoming"
 ETC = Path(os.environ.get("RE_ETC", "/etc/re-agent"))
+RUN = Path(os.environ.get("RE_RUN", "/run/re-agent"))
 STATIC = Path(__file__).with_name("static")
 
 TEXT_LIMIT = 1024 * 1024
@@ -1586,6 +1605,13 @@ async def guard(request: Request, call_next):
     # can't add a custom header without a CORS preflight, which never succeeds.
     if request.method not in ("GET", "HEAD") and request.headers.get("x-re-console") != "1":
         return JSONResponse({"detail": "Missing X-RE-Console header"}, status_code=403, headers=SECURITY_HEADERS)
+    # Refuse an oversized upload before Starlette spools it to disk.
+    if request.url.path == "/api/intake":
+        length = request.headers.get("content-length")
+        if not length or not length.isdigit():
+            return JSONResponse({"detail": "Uploads need a Content-Length"}, status_code=411, headers=SECURITY_HEADERS)
+        if int(length) > UPLOAD_LIMIT + 1024 * 1024:
+            return JSONResponse({"detail": f"The upload is larger than {UPLOAD_LIMIT // (1024 * 1024)} MB"}, status_code=413, headers=SECURITY_HEADERS)
     response = await call_next(request)
     response.headers.update(SECURITY_HEADERS)
     return response
@@ -1628,6 +1654,21 @@ def case_state(path):
     return {**DEFAULT_STATE, **read_json(path / "case.json", {})}
 
 
+class case_lock:
+    """The lock rea-case verdict also takes (flock on case.json.lock), so the
+    console, the CLI and intake jobs don't overwrite each other's case.json edits."""
+
+    def __init__(self, path):
+        self.file = path / "case.json.lock"
+
+    def __enter__(self):
+        self.f = open(self.file, "a")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+
+    def __exit__(self, *exc):
+        self.f.close()
+
+
 def run_tool(args, timeout=900):
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, cwd=WORK, stdin=subprocess.DEVNULL)
@@ -1666,7 +1707,7 @@ def file_facts(path):
     return _hash_cache[key]
 
 
-def list_files(path, limit=2000):
+def list_files(path, limit=None):
     out = []
     for root, dirs, files in os.walk(path):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
@@ -1676,7 +1717,7 @@ def list_files(path, limit=2000):
                 continue
             st = full.stat()
             out.append({"path": str(full.relative_to(path)), "size": st.st_size, "mtime": st.st_mtime})
-            if len(out) >= limit:
+            if limit and len(out) >= limit:
                 return out
     return out
 
@@ -1710,13 +1751,29 @@ def network():
         allow = [l.strip() for l in (ETC / "egress-allow").read_text().splitlines() if l.strip() and not l.strip().startswith("#")]
     except OSError:
         allow = []
+    # re-firewall writes this to /run after its rules apply; /run empties at boot.
+    applied = {}
+    try:
+        for line in (RUN / "firewall.applied").read_text().splitlines():
+            key, _, value = line.partition("=")
+            applied[key.strip()] = value.strip()
+    except OSError:
+        pass
     mode = conf.get("MODE", "open")
     proxy, port = conf.get("PROXY_IP", ""), conf.get("PROXY_PORT", "")
+    state = "open"
     if mode == "isolate":
-        label = "Quarantined: local proxy" if proxy == "local" else f"Quarantined: proxy {proxy}:{port}"
+        where = "local proxy" if proxy == "local" else f"proxy {proxy}:{port}"
+        if not applied:
+            state, label = "unconfirmed", "Quarantine not confirmed"
+        elif applied.get("IPV6") != "blocked":
+            state, label = "partial", f"Quarantined ({where}), IPv6 open"
+        else:
+            state, label = "isolated", f"Quarantined: {where}"
     else:
         label = "Open network"
-    return {"mode": mode, "proxy": proxy, "port": port, "allowlist": sorted(set(allow)), "label": label}
+    return {"mode": mode, "state": state, "proxy": proxy, "port": port, "applied_at": applied.get("APPLIED"),
+            "allowlist": sorted(set(allow)), "label": label}
 
 
 # ---------------------------------------------------------------- intake jobs
@@ -1762,8 +1819,27 @@ class Jobs:
         with self.lock:
             job["state"] = "running"
             self._save(job)
-        steps = (["rea-case", "new", job["sample"]], ["re-ioc", "extract", str(CASES / job["case"])])
         error = None
+        try:
+            error = self._steps(job)
+            if error is None:
+                path = CASES / job["case"]
+                with case_lock(path):
+                    state = case_state(path)
+                    state.setdefault("intake", {"original_name": job["original"], "uploaded_at": job["created"], "via": "console"})
+                    write_json(path / "case.json", state)
+        except Exception as e:  # noqa: BLE001 - any failure must still end the job
+            error = f"{type(e).__name__}: {e}"
+        finally:
+            with self.lock:
+                job.update(state="failed" if error else "done", error=error, finished=time.time())
+                try:
+                    self._save(job)
+                except OSError:
+                    pass
+
+    def _steps(self, job):
+        steps = (["rea-case", "new", job["sample"]], ["re-ioc", "extract", str(CASES / job["case"])])
         with open(JOBS_DIR / f"{job['id']}.log", "w") as log:
             for args in steps:
                 log.write(f"$ {' '.join(args)}\n")
@@ -1771,19 +1847,28 @@ class Jobs:
                 try:
                     proc = subprocess.run(args, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=WORK, timeout=3600)
                 except (OSError, subprocess.TimeoutExpired) as e:
-                    error = f"{args[0]}: {e}"
-                    break
+                    return f"{args[0]}: {e}"
                 if proc.returncode != 0:
-                    error = f"{args[0]} exited with status {proc.returncode}"
-                    break
-        if error is None:
-            path = CASES / job["case"]
-            state = case_state(path)
-            state.setdefault("intake", {"original_name": job["original"], "uploaded_at": job["created"], "via": "console"})
-            write_json(path / "case.json", state)
+                    return f"{args[0]} exited with status {proc.returncode}"
+        return None
+
+    def retry(self, job_id):
         with self.lock:
-            job.update(state="failed" if error else "done", error=error, finished=time.time())
+            job = self.jobs.get(job_id)
+            if not job:
+                raise HTTPException(404, "No such job")
+            if job["state"] not in ("failed", "interrupted"):
+                raise HTTPException(409, "Only a failed or interrupted job can be retried")
+            if not Path(job["sample"]).is_file():
+                raise HTTPException(410, "The sample file is gone; upload it again")
+            job.update(state="queued", error=None, finished=None, created=time.time())
             self._save(job)
+        self.pool.submit(self._run, job)
+        return job
+
+    def failed_for(self, case):
+        with self.lock:
+            return next((j["id"] for j in self.jobs.values() if j["case"] == case and j["state"] in ("failed", "interrupted")), None)
 
     def listing(self, limit=20):
         with self.lock:
@@ -1805,6 +1890,7 @@ class Jobs:
 
 
 jobs = Jobs()
+_intake_lock = threading.Lock()
 
 
 def safe_name(name):
@@ -1853,18 +1939,17 @@ def _unzip(archive, password):
                     sha = _copy_hashed(src, dst, ZIP_TOTAL - total, "The unpacked archive")
                 total += dst.stat().st_size
                 items[-1] = (info.filename, dst, sha)
-    except RuntimeError as e:
-        for _n, p, _s in items:
-            p.unlink(missing_ok=True)
-        if "password" in str(e).lower():
-            raise HTTPException(400, "Wrong archive password" if password else "The archive needs a password")
-        raise HTTPException(400, f"Could not unpack the archive: {e}")
-    except (zipfile.BadZipFile, NotImplementedError, HTTPException) as e:
+    except BaseException as e:
+        # Any failure, a corrupt member included, leaves nothing behind in incoming/.
         for _n, p, _s in items:
             p.unlink(missing_ok=True)
         if isinstance(e, HTTPException):
             raise
-        raise HTTPException(400, f"Could not unpack the archive: {e}")
+        if isinstance(e, RuntimeError) and "password" in str(e).lower():
+            raise HTTPException(400, "Wrong archive password" if password else "The archive needs a password")
+        if isinstance(e, Exception):
+            raise HTTPException(400, f"Could not unpack the archive: {e}")
+        raise
     return items
 
 
@@ -1885,7 +1970,7 @@ def cases():
         meta = read_json(path / "metadata.json", {})
         book = read_json(path / "casebook.json", {})
         iocs = read_json(path / "iocs.json", {}).get("iocs", {})
-        files = list_files(path, limit=500)
+        files = list_files(path)
         last = max([f["mtime"] for f in files] + [path.stat().st_mtime])
         out.append({
             "name": path.name, "type": meta.get("file_type", ""), "sha256": meta.get("sha256", ""),
@@ -1933,6 +2018,11 @@ class CaseUpdate(BaseModel):
 @app.patch("/api/cases/{name}")
 def update_case(name: str, body: CaseUpdate):
     path = case_dir(name)
+    with case_lock(path):
+        return _update_state(path, body)
+
+
+def _update_state(path, body):
     state = case_state(path)
     if body.status is not None:
         if body.status not in STATUSES:
@@ -1952,7 +2042,7 @@ def update_case(name: str, body: CaseUpdate):
 
 @app.get("/api/cases/{name}/files")
 def files(name: str):
-    return list_files(case_dir(name))
+    return list_files(case_dir(name), limit=5000)
 
 
 @app.get("/api/cases/{name}/file")
@@ -2085,8 +2175,9 @@ def export(name: str, body: Export):
 def download(name: str, artifact: str):
     if artifact not in DOWNLOADS:
         raise HTTPException(404, "Not a case export")
-    full = case_dir(name) / artifact
-    if not full.is_file():
+    base = case_dir(name).resolve()
+    full = base / artifact
+    if full.is_symlink() or full.resolve().parent != base or not full.is_file():
         raise HTTPException(404, "Not exported yet")
     return FileResponse(full, media_type=DOWNLOADS[artifact], filename=f"{name}-{artifact}")
 
@@ -2109,21 +2200,24 @@ def intake(file: UploadFile = File(...), password: str = Form("infected"), unpac
             upload.unlink(missing_ok=True)
     else:
         items = [(original, upload, sha)]
-    known = sha_index()
     results = []
-    for orig, tmp, digest in items:
-        dup = known.get(digest) or jobs.pending_sha(digest)
-        if dup:
-            tmp.unlink(missing_ok=True)
-            results.append({"name": orig, "sha256": digest, "duplicate_of": dup})
-            continue
-        name = unique_name(safe_name(orig), digest)
-        dest = SAMPLES / name
-        os.replace(tmp, dest)
-        os.chmod(dest, 0o640)
-        job = jobs.submit(dest, name, orig, digest)
-        known[digest] = name
-        results.append({"name": orig, "sha256": digest, "case": name, "job": job["id"]})
+    # One intake at a time picks names and checks hashes, so two uploads can't
+    # claim the same sample path or both start a case for the same bytes.
+    with _intake_lock:
+        known = sha_index()
+        for orig, tmp, digest in items:
+            dup = known.get(digest) or jobs.pending_sha(digest)
+            if dup:
+                tmp.unlink(missing_ok=True)
+                results.append({"name": orig, "sha256": digest, "duplicate_of": dup, "retry_job": jobs.failed_for(dup)})
+                continue
+            name = unique_name(safe_name(orig), digest)
+            dest = SAMPLES / name
+            os.replace(tmp, dest)
+            os.chmod(dest, 0o640)
+            job = jobs.submit(dest, name, orig, digest)
+            known[digest] = name
+            results.append({"name": orig, "sha256": digest, "case": name, "job": job["id"]})
     return {"results": results}
 
 
@@ -2135,6 +2229,11 @@ def job_list():
 @app.get("/api/jobs/{job_id}")
 def job(job_id: str):
     return jobs.get(job_id)
+
+
+@app.post("/api/jobs/{job_id}/retry")
+def job_retry(job_id: str):
+    return jobs.retry(job_id)
 
 
 @app.get("/")
@@ -2270,6 +2369,8 @@ h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spa
 .netpill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
 .netpill.safe { border-color: color-mix(in srgb, var(--green) 45%, transparent); background: var(--green-soft); }
 .netpill.safe .dot { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.netpill.warn { border-color: color-mix(in srgb, var(--amber) 55%, transparent); background: var(--amber-soft); }
+.netpill.warn .dot { background: var(--amber); }
 .netpill.open { border-color: color-mix(in srgb, var(--red) 55%, transparent); background: var(--red-soft); }
 .netpill.open .dot { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); animation: pulse 1.6s infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px transparent; } }
@@ -2283,6 +2384,8 @@ h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spa
 .openbanner {
   background: var(--red); color: #fff; padding: 9px 24px; font-size: 13.5px;
 }
+.openbanner.warn { background: var(--amber); color: #1a1205; }
+.openbanner.warn code { color: #1a1205; background: rgba(0, 0, 0, 0.12); }
 .openbanner code { background: rgba(0, 0, 0, 0.22); border-color: transparent; color: #fff; }
 
 .main { max-width: 1280px; margin: 0 auto; padding: 24px; outline: none; }
@@ -2588,15 +2691,25 @@ async function loadStatus() {
     const s = await api("/api/status");
     const n = s.network;
     const pill = $("#netpill");
-    pill.className = `netpill ${n.mode === "isolate" ? "safe" : "open"}`;
+    pill.className = `netpill ${{ isolated: "safe", open: "open" }[n.state] || "warn"}`;
     $("#netlabel").textContent = n.label;
-    $("#openbanner").hidden = n.mode === "isolate";
+    const banner = $("#openbanner");
+    banner.hidden = n.state === "isolated";
+    banner.className = `openbanner ${n.state === "open" ? "" : "warn"}`;
+    banner.replaceChildren(...{
+      open: [h("strong", {}, "The network is open."), " Samples and tools can reach the internet. Before handling samples, run ", h("code", {}, "re-firewall isolate local"), " as root."],
+      unconfirmed: [h("strong", {}, "The quarantine is set but not confirmed."), " Its rules haven't been applied since this guest booted. Check with ", h("code", {}, "re-firewall status"), " as root, and re-apply with ", h("code", {}, "re-firewall apply"), "."],
+      partial: [h("strong", {}, "IPv6 egress is not blocked."), " The IPv4 quarantine is on, but ip6tables wasn't available. Install it and run ", h("code", {}, "re-firewall apply"), " as root."],
+    }[n.state] || []);
     const pop = $("#netpop");
     pop.replaceChildren(
-      h("h2", {}, n.mode === "isolate" ? "Egress quarantine is on" : "Egress quarantine is off"),
-      h("p", {}, n.mode === "isolate"
-        ? "Outbound traffic goes only to these hosts, through the proxy. IPv6 is blocked."
-        : "Nothing limits outbound traffic. Run re-firewall isolate local as root to turn the quarantine on."),
+      h("h2", {}, { isolated: "Egress quarantine is on", open: "Egress quarantine is off", partial: "Quarantine on, IPv6 open", unconfirmed: "Quarantine not confirmed" }[n.state]),
+      h("p", {}, {
+        isolated: `Outbound traffic goes only to these hosts, through the proxy. IPv6 is blocked. Rules applied ${stamp(Number(n.applied_at))}.`,
+        open: "Nothing limits outbound traffic. Run re-firewall isolate local as root to turn the quarantine on.",
+        partial: "IPv4 goes only to these hosts, through the proxy, but IPv6 is not blocked.",
+        unconfirmed: "The quarantine is configured, but re-firewall hasn't confirmed applying its rules since boot.",
+      }[n.state]),
       h("h3", {}, `Allowed hosts (${n.allowlist.length})`),
       h("ul", {}, n.allowlist.map((a) => h("li", { class: "mono" }, a))),
       h("p", { class: "dim" }, "Change it as root with re-firewall allow or deny. The console can't change it."),
@@ -2654,7 +2767,8 @@ function intakeCard() {
       }
       for (const r of data.results) {
         results.prepend(r.duplicate_of
-          ? h("div", { class: "result" }, badge("candidate", "duplicate"), h("span", { class: "mono" }, r.name), h("span", { class: "muted" }, "already analysed in"), h("a", { href: caseHref(r.duplicate_of) }, r.duplicate_of))
+          ? h("div", { class: "result" }, badge("candidate", "duplicate"), h("span", { class: "mono" }, r.name), h("span", { class: "muted" }, "already in case"), h("a", { href: caseHref(r.duplicate_of) }, r.duplicate_of),
+            r.retry_job ? [h("span", { class: "muted" }, "· its intake failed"), retryBtn(r.retry_job)] : null)
           : h("div", { class: "result" }, badge("open", "new case"), h("span", { class: "mono" }, r.name), h("span", { class: "muted" }, "→ case"), h("a", { href: caseHref(r.case) }, r.case)));
         if (r.job) dash.openJobs.add(r.job);
       }
@@ -2682,6 +2796,12 @@ function intakeCard() {
   );
 }
 
+const retryBtn = (id) => h("button", { class: "btn btn-sm", type: "button", onclick: async (e) => {
+  e.stopPropagation();
+  e.target.disabled = true;
+  try { await api(`/api/jobs/${id}/retry`, { method: "POST" }); dash.openJobs.add(id); toast("Intake restarted", "ok"); refreshJobs(); } catch (err) { toast(err.message, "err"); e.target.disabled = false; }
+} }, "Retry");
+
 function jobsSection() {
   const wrap = h("div", { class: "jobs", id: "jobs" });
   return h("section", { id: "jobs-section", class: "stack", hidden: true }, h("h3", {}, "Intake jobs"), wrap);
@@ -2694,7 +2814,7 @@ async function refreshJobs() {
   dash.jobs = list;
   const wrap = $("#jobs");
   if (!wrap) return;
-  const recent = list.filter((j) => j.state === "running" || j.state === "queued" || Date.now() / 1000 - (j.finished || j.created) < 3600);
+  const recent = list.filter((j) => j.state !== "done" || Date.now() / 1000 - (j.finished || j.created) < 3600);
   $("#jobs-section").hidden = recent.length === 0;
   const items = [];
   for (const j of recent) {
@@ -2709,6 +2829,7 @@ async function refreshJobs() {
         j.original !== j.case ? h("span", { class: "dim" }, `from ${j.original}`) : null,
         h("span", { class: "spacer" }),
         j.error ? h("span", { class: "muted" }, j.error) : null,
+        j.state === "failed" || j.state === "interrupted" ? retryBtn(j.id) : null,
         h("span", { class: "dim" }, ago(j.finished || j.created)),
       ),
       log,
@@ -2829,7 +2950,11 @@ function tabOverview(c, body) {
   const save = h("button", { class: "btn btn-primary", type: "button", onclick: async () => {
     save.disabled = true;
     try {
-      await api(`/api/cases/${encodeURIComponent(c.name)}`, { method: "PATCH", body: { verdict: verdict.value, status: status.value, family: family.value, notes: notes.value } });
+      // Only what changed here, so a verdict the agent set meanwhile isn't overwritten.
+      const changed = {};
+      for (const [k, el] of Object.entries({ verdict, status, family, notes })) if (el.value !== (c.state[k] || "")) changed[k] = el.value;
+      if (!Object.keys(changed).length) { toast("Nothing changed"); save.disabled = false; return; }
+      await api(`/api/cases/${encodeURIComponent(c.name)}`, { method: "PATCH", body: changed });
       toast("Case updated", "ok");
       renderCase(c.name, "overview");
     } catch (e) { toast(e.message, "err"); save.disabled = false; }
@@ -2968,7 +3093,7 @@ async function tabFiles(c, body) {
     } catch (e) { viewer.textContent = e.message; }
   };
   body.replaceChildren(h("div", { class: "files" },
-    h("section", { class: "card file-list" }, items.length ? items : h("p", { class: "muted" }, "This case has no files."), h("p", { class: "hint" }, "Files under children/ and anything binary open as a hex dump. Nothing here runs or renders file contents.")),
+    h("section", { class: "card file-list" }, items.length ? items : h("p", { class: "muted" }, "This case has no files."), list.length >= 5000 ? h("p", { class: "hint" }, "Only the first 5000 files are listed.") : null, h("p", { class: "hint" }, "Files under children/ and anything binary open as a hex dump. Nothing here runs or renders file contents.")),
     h("section", { class: "card" }, viewerHead, viewer),
   ));
   const pick = filesState.pick && list.some((f) => f.path === filesState.pick) ? filesState.pick : (list.find((f) => f.path === "investigation_plan.md") || list[0] || {}).path;

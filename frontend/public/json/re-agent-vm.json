@@ -14,7 +14,7 @@
   "website": "https://github.com/morluto/rea",
   "logo": null,
   "config_path": "/home/analyst/.hermes",
-  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
+  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders, re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
   "install_methods": [
     {
       "type": "default",

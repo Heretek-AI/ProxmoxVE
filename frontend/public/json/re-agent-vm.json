@@ -1,0 +1,61 @@
+{
+  "name": "RE-Agent VM",
+  "slug": "re-agent-vm",
+  "categories": [
+    6,
+    20
+  ],
+  "date_created": "2026-10-24",
+  "type": "vm",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": null,
+  "documentation": "https://github.com/morluto/rea/blob/main/docs/installation.md",
+  "website": "https://github.com/morluto/rea",
+  "logo": null,
+  "config_path": "/home/analyst/.hermes",
+  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "vm/re-agent-vm.sh",
+      "resources": {
+        "cpu": 4,
+        "ram": 8192,
+        "hdd": 40,
+        "os": "debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "Run 're-agent-setup' inside the guest to configure your model provider and start the Hermes gateway API on port 8642 (key in /home/analyst/.hermes/.env).",
+      "type": "info"
+    },
+    {
+      "text": "The Hermes dashboard listens on 127.0.0.1:9119. Reach it with: ssh -L 9119:127.0.0.1:9119 root@<IP>",
+      "type": "info"
+    },
+    {
+      "text": "Run 'rea-case new <sample>' to start a case in /work/cases.",
+      "type": "info"
+    },
+    {
+      "text": "Run 're-firewall isolate local' as root before handling samples (or 'isolate <proxy_ip> [port]' to use a proxy on the host). Only allowlisted LLM hosts stay reachable, IPv6 is blocked, and it persists across reboots.",
+      "type": "warning"
+    },
+    {
+      "text": "Add a custom OpenAI-compatible provider with 're-agent-config provider add <name> <base_url>' (for example heretek https://llm.heretek.one/v1), and turn on memory search by meaning with 're-agent-config embeddings <base_url> <model>'. Both add the host to the egress allowlist.",
+      "type": "info"
+    },
+    {
+      "text": "After setup, take a clean baseline snapshot: qm snapshot <vmid> baseline-clean",
+      "type": "info"
+    }
+  ]
+}

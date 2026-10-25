@@ -31,6 +31,11 @@ for it instead:
 
 - `ct/<app>.sh` and `install/<app>-install.sh` for each Heretek script. These
   are the ct scripts whose `COMMUNITY_SCRIPTS_URL` defaults to this repository.
+- `vm/<app>-vm.sh` for a Heretek app that also ships as a VM. Its
+  `COMMUNITY_SCRIPTS_URL` defaults to this repository too, and it installs the
+  app by running `install/<app>-install.sh` inside the image through
+  `community-scripts/core`'s `pve/vm-app.func`, so the VM and the LXC install
+  the same thing. `vm/re-agent-vm.sh` is the example to copy.
 - `frontend/`: the website, deployed to GitHub Pages.
 - `docs/`: this file, guides, and images (`docs/images`).
 - `.github/README.md` and the `.github/workflows/heretek-*.yml` workflows.
@@ -44,7 +49,9 @@ for it instead:
    `/usr/bin/update` come from here. The next two load the engine from
    `community-scripts/core`, exactly as upstream scripts do.
 3. Add `frontend/public/json/<app>.json` so the script shows up on the site.
-4. Open a pull request. ShellCheck runs on the scripts you changed.
+4. For a VM variant, add `vm/<app>-vm.sh` and its own
+   `frontend/public/json/<app>-vm.json` (one JSON per script, `type: "vm"`).
+5. Open a pull request. ShellCheck runs on the scripts you changed.
 
 Heretek apps don't show an ASCII banner, because core only serves banners for
 its own catalogue. That's expected.

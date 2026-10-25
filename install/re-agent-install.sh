@@ -72,18 +72,19 @@ cat <<'EOF' >/usr/local/sbin/re-capa-rules
 #!/usr/bin/env bash
 set -euo pipefail
 ver=$(/opt/re-tools-venv/bin/python -c 'import capa.version; print(capa.version.__version__)')
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+# Build the new tree next to /opt/capa and swap it in only once it is complete.
+tmp=$(mktemp -d /opt/.capa.XXXXXX)
+trap 'rm -rf "$tmp" /opt/capa.old' EXIT
 curl -fsSL "https://github.com/mandiant/capa-rules/archive/refs/tags/v${ver}.tar.gz" -o "$tmp/rules.tar.gz"
 curl -fsSL "https://github.com/mandiant/capa/archive/refs/tags/v${ver}.tar.gz" -o "$tmp/capa.tar.gz"
-mkdir -p "$tmp/rules" "$tmp/capa"
-tar -xzf "$tmp/rules.tar.gz" -C "$tmp/rules" --strip-components=1
-tar -xzf "$tmp/capa.tar.gz" -C "$tmp/capa" --strip-components=1 --wildcards '*/sigs/*'
-rm -rf /opt/capa
-mkdir -p /opt/capa
-mv "$tmp/rules" /opt/capa/rules
-mv "$tmp/capa/sigs" /opt/capa/sigs
-echo "$ver" >/opt/capa/version
+mkdir -p "$tmp/new/rules" "$tmp/src"
+tar -xzf "$tmp/rules.tar.gz" -C "$tmp/new/rules" --strip-components=1
+tar -xzf "$tmp/capa.tar.gz" -C "$tmp/src" --strip-components=1 --wildcards '*/sigs/*'
+mv "$tmp/src/sigs" "$tmp/new/sigs"
+echo "$ver" >"$tmp/new/version"
+rm -rf /opt/capa.old
+[[ -d /opt/capa ]] && mv /opt/capa /opt/capa.old
+mv "$tmp/new" /opt/capa
 EOF
 chmod 755 /usr/local/sbin/re-capa-rules
 $STD /usr/local/sbin/re-capa-rules

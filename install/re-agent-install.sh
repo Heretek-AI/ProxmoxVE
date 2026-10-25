@@ -1,282 +1,143 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2021-2026 community-scripts ORG
-# Author: Derek & community contributors
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-# Source: https://github.com/alexmi256/rea-agent-docker | https://github.com/morluto/rea | https://github.com/openbin-ai/binny
+# Author: BillyOutlast
+# License: MIT | https://github.com/Heretek-AI/ProxmoxVE/raw/main/LICENSE
+# Source: https://github.com/morluto/rea | https://github.com/openbin-ai/binny | https://hermes-agent.nousresearch.com/
 
-source /dev/stdin <<<"$FUNCTIONS_FILE_PATH" 2>/dev/null || true
-if ! declare -f msg_info >/dev/null 2>&1; then
-  # Standalone fallback functions if executed directly
-  YW=$(echo "\033[33m")
-  BL=$(echo "\033[36m")
-  RD=$(echo "\033[01;31m")
-  BGN=$(echo "\033[4;92m")
-  GN=$(echo "\033[1;92m")
-  CL=$(echo "\033[m")
-  msg_info() { echo -e "${BL}[INFO]${CL} $*"; }
-  msg_ok() { echo -e "${GN}[OK]${CL} $*"; }
-  msg_warn() { echo -e "${YW}[WARN]${CL} $*"; }
-  msg_error() { echo -e "${RD}[ERROR]${CL} $*"; }
-  STD=""
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
+color
+verb_ip6
+catch_errors
+setting_up_container
+network_check
+update_os
+
+if [[ "$(dpkg --print-architecture)" != "amd64" ]]; then
+  msg_error "RE-Agent supports amd64 only (Detect It Easy and the BINNY build used here are x86_64)"
+  exit 1
 fi
 
-export DEBIAN_FRONTEND=noninteractive
-
-msg_info "Updating base operating system packages"
-apt-get update -y >/dev/null 2>&1
-apt-get upgrade -y >/dev/null 2>&1
-msg_ok "Updated base operating system"
-
-msg_info "Installing core reverse-engineering system dependencies"
-apt-get install -y --no-install-recommends \
-  curl \
-  wget \
+msg_info "Installing Dependencies"
+$STD apt install -y \
   git \
   jq \
   file \
-  tar \
   unzip \
   p7zip-full \
   build-essential \
-  pkg-config \
-  libssl-dev \
   python3 \
-  python3-pip \
   python3-venv \
   python3-dev \
   iptables \
-  ipset \
-  ca-certificates \
-  gnupg \
+  squid \
+  bubblewrap \
   radare2 \
   upx-ucl \
+  yara \
   tshark \
-  tcpdump \
-  sudo >/dev/null 2>&1
-msg_ok "Installed system dependencies"
+  tcpdump
+msg_ok "Installed Dependencies"
 
-# ------------------------------------------------------------------------------
-# 1. OpenJDK 21 & Ghidra Headless Engine
-# ------------------------------------------------------------------------------
-msg_info "Installing OpenJDK 21 Headless for Ghidra"
-apt-get install -y --no-install-recommends openjdk-21-jdk-headless >/dev/null 2>&1
-export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
-msg_ok "Installed OpenJDK 21 Headless"
+JAVA_VERSION="21" setup_java
+NODE_VERSION="22" NODE_MODULE="rea-agents" setup_nodejs
 
-msg_info "Downloading and deploying Ghidra"
-GHIDRA_DIR="/opt/ghidra"
-if [[ ! -d "$GHIDRA_DIR" ]]; then
-  mkdir -p "$GHIDRA_DIR"
-  GHIDRA_TAG=$(curl -s https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest | jq -r '.tag_name' 2>/dev/null || echo "Ghidra_11.2.1_build")
-  GHIDRA_URL=$(curl -s https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/latest | jq -r '.assets[] | select(.name | test("ghidra_.*_PUBLIC_.*\\.zip")) | .browser_download_url' 2>/dev/null | head -1)
-  
-  if [[ -z "$GHIDRA_URL" || "$GHIDRA_URL" == "null" ]]; then
-    GHIDRA_URL="https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.2.1_build/ghidra_11.2.1_PUBLIC_20241105.zip"
-  fi
+fetch_and_deploy_gh_release "ghidra" "NationalSecurityAgency/ghidra" "prebuild" "latest" "/opt/ghidra" "ghidra_*_PUBLIC_*.zip"
+chmod +x /opt/ghidra/support/analyzeHeadless /opt/ghidra/ghidraRun
+fetch_and_deploy_gh_release "binny" "openbin-ai/binny-releases" "prebuild" "latest" "/opt/binny" "binny-linux-amd64.tar.gz"
+ln -sf /opt/binny/binny /usr/local/bin/binny
 
-  TMP_ZIP="/tmp/ghidra.zip"
-  wget -q -O "$TMP_ZIP" "$GHIDRA_URL" || curl -fsSL -o "$TMP_ZIP" "$GHIDRA_URL"
-  unzip -q "$TMP_ZIP" -d /opt/
-  rm -f "$TMP_ZIP"
-  
-  EXTRACTED_DIR=$(find /opt -maxdepth 1 -type d -name "ghidra_*_PUBLIC" | head -1)
-  if [[ -n "$EXTRACTED_DIR" ]]; then
-    mv "$EXTRACTED_DIR"/* "$GHIDRA_DIR"/
-    rm -rf "$EXTRACTED_DIR"
-  fi
-  chmod +x "$GHIDRA_DIR"/support/analyzeHeadless "$GHIDRA_DIR"/ghidraRun 2>/dev/null || true
-  msg_ok "Ghidra deployed to $GHIDRA_DIR"
+if fetch_and_deploy_gh_release "die" "horsicq/DIE-engine" "prebuild" "latest" "/opt/die" "die_lin64_portable_*.tar.gz"; then
+  DIEC_BIN=$(find /opt/die -maxdepth 2 -type f -name 'diec*' | head -n1)
+  [[ -n "$DIEC_BIN" ]] && ln -sf "$DIEC_BIN" /usr/local/bin/diec
 else
-  msg_ok "Ghidra already present in $GHIDRA_DIR"
+  msg_warn "Detect It Easy could not be installed; the rest of the toolchain is unaffected"
 fi
 
-# Configure environment exports for Ghidra
-cat << 'EOF' > /etc/profile.d/re-agent.sh
-export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
-export GHIDRA_INSTALL_DIR="/opt/ghidra"
-export GHIDRA_HEADLESS_MAXMEM="4G"
-export PATH="$PATH:/opt/ghidra/support:/usr/local/bin"
-EOF
-chmod 644 /etc/profile.d/re-agent.sh
-source /etc/profile.d/re-agent.sh
-
-# ------------------------------------------------------------------------------
-# 2. Node.js 22 LTS & REA (Reverse Engineer Anything)
-# ------------------------------------------------------------------------------
-msg_info "Installing Node.js 22 LTS"
-if ! command -v node >/dev/null 2>&1 || [[ $(node -v | cut -d'.' -f1 | tr -d 'v') -lt 20 ]]; then
-  mkdir -p /etc/apt/keyrings
-  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg --yes 2>/dev/null
-  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
-  apt-get update -y >/dev/null 2>&1
-  apt-get install -y nodejs >/dev/null 2>&1
-fi
-msg_ok "Installed Node.js $(node -v 2>/dev/null)"
-
-msg_info "Installing REA (rea-agents) and MCP tools globally"
-npm install -g rea-agents supergateway >/dev/null 2>&1
-msg_ok "Installed rea-agents and supergateway"
-
-# ------------------------------------------------------------------------------
-# 3. Static Malware Triage Toolchain (CAPA, FLOSS, YARA, DIEC)
-# ------------------------------------------------------------------------------
-msg_info "Deploying static malware triage toolchain"
-mkdir -p /opt/triage-tools /opt/triage-tools/rules
-
-# Python RE Virtual Environment with uv/pip
+msg_info "Installing Python triage tools"
 python3 -m venv /opt/re-tools-venv
-/opt/re-tools-venv/bin/pip install --upgrade pip wheel >/dev/null 2>&1
-/opt/re-tools-venv/bin/pip install --no-cache-dir \
-  flare-capa \
-  flare-floss \
-  yara-python \
-  pefile \
-  pwntools \
-  pyelftools \
-  r2pipe >/dev/null 2>&1
-
-# Link binaries into system path
+$STD /opt/re-tools-venv/bin/pip install --upgrade pip wheel
+$STD /opt/re-tools-venv/bin/pip install flare-capa flare-floss yara-python pefile pyelftools r2pipe
 ln -sf /opt/re-tools-venv/bin/capa /usr/local/bin/capa
 ln -sf /opt/re-tools-venv/bin/floss /usr/local/bin/floss
+msg_ok "Installed Python triage tools"
 
-# Detect It Easy CLI (diec)
-DIEC_URL=$(curl -s https://api.github.com/repos/horsicq/DIE-engine/releases/latest | jq -r '.assets[] | select(.name | test("die_.*_Ubuntu_.*_amd64\\.deb")) | .browser_download_url' 2>/dev/null | head -1)
-if [[ -n "$DIEC_URL" && "$DIEC_URL" != "null" ]]; then
-  wget -q -O /tmp/diec.deb "$DIEC_URL" 2>/dev/null && dpkg -i /tmp/diec.deb >/dev/null 2>&1 || true
-  rm -f /tmp/diec.deb
-fi
-msg_ok "Deployed CAPA, FLOSS, YARA, and PE analysis tools"
-
-# ------------------------------------------------------------------------------
-# 4. OpenBin BINNY RE Agent Harness
-# ------------------------------------------------------------------------------
-msg_info "Installing OpenBin BINNY agent harness"
-BINNY_BIN_URL=$(curl -s https://api.github.com/repos/openbin-ai/binny/releases/latest | jq -r '.assets[] | select(.name | test("binny-.*linux.*amd64")) | .browser_download_url' 2>/dev/null | head -1)
-if [[ -n "$BINNY_BIN_URL" && "$BINNY_BIN_URL" != "null" ]]; then
-  wget -q -O /usr/local/bin/binny "$BINNY_BIN_URL"
-  chmod +x /usr/local/bin/binny
-else
-  # Fallback to official install script
-  curl -fsSL https://openbin.ai/install-binny.sh 2>/dev/null | sh >/dev/null 2>&1 || true
-fi
-msg_ok "Configured OpenBin BINNY"
-
-# ------------------------------------------------------------------------------
-# 5. REA Casebook Evidence Tracker (pablodiazjorge/rea-casebook)
-# ------------------------------------------------------------------------------
-msg_info "Deploying REA Casebook evidence validation engine"
-cat << 'CASEBOOK_SCRIPT' > /usr/local/bin/rea-casebook
-#!/usr/bin/env python3
-"""
-REA Casebook - Verifiable Evidence Tracker for AI Reverse Engineering
-Ensures AI agents cite verifiable evidence_id tokens rather than hallucinating.
-"""
-import sys
-import os
-import json
-import time
-
-def init_casebook(case_dir, sample_path):
-    os.makedirs(case_dir, exist_ok=True)
-    casebook_path = os.path.join(case_dir, "casebook.json")
-    if not os.path.exists(casebook_path):
-        data = {
-            "sample": os.path.abspath(sample_path),
-            "created_at": time.time(),
-            "evidence": {},
-            "verified_claims": []
-        }
-        with open(casebook_path, "w") as f:
-            json.dump(data, f, indent=2)
-    print(f"[CASEBOOK] Initialized casebook at {casebook_path}")
-
-def record_evidence(case_dir, evidence_id, category, content, offset=None):
-    casebook_path = os.path.join(case_dir, "casebook.json")
-    if not os.path.exists(casebook_path):
-        print(f"[ERROR] Casebook not found at {casebook_path}", file=sys.stderr)
-        sys.exit(1)
-    with open(casebook_path, "r") as f:
-        data = json.load(f)
-    data["evidence"][evidence_id] = {
-        "category": category,
-        "content": content,
-        "offset": offset,
-        "timestamp": time.time()
-    }
-    with open(casebook_path, "w") as f:
-        json.dump(data, f, indent=2)
-    print(f"[CASEBOOK] Recorded evidence: {evidence_id}")
-
-def verify_claim(case_dir, claim_text, required_evidence_ids):
-    casebook_path = os.path.join(case_dir, "casebook.json")
-    with open(casebook_path, "r") as f:
-        data = json.load(f)
-    missing = [eid for eid in required_evidence_ids if eid not in data["evidence"]]
-    if missing:
-        print(f"[REJECTED] Claim rejected! Missing evidence IDs: {missing}", file=sys.stderr)
-        return False
-    data["verified_claims"].append({
-        "claim": claim_text,
-        "evidence_ids": required_evidence_ids,
-        "timestamp": time.time()
-    })
-    with open(casebook_path, "w") as f:
-        json.dump(data, f, indent=2)
-    print(f"[ACCEPTED] Claim verified with {len(required_evidence_ids)} citations.")
-    return True
-
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: rea-casebook [init|record|verify] [args...]")
-        sys.exit(1)
-    cmd = sys.argv[1]
-    if cmd == "init" and len(sys.argv) >= 4:
-        init_casebook(sys.argv[2], sys.argv[3])
-    elif cmd == "record" and len(sys.argv) >= 6:
-        record_evidence(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6] if len(sys.argv) > 6 else None)
-    elif cmd == "verify" and len(sys.argv) >= 5:
-        claim = sys.argv[3]
-        eids = sys.argv[4].split(",")
-        ok = verify_claim(sys.argv[2], claim, eids)
-        sys.exit(0 if ok else 1)
-CASEBOOK_SCRIPT
-chmod +x /usr/local/bin/rea-casebook
-msg_ok "Deployed REA Casebook verification engine"
-
-# ------------------------------------------------------------------------------
-# 6. User Account & Hermes Agent (Nous Research) Setup
-# ------------------------------------------------------------------------------
-msg_info "Creating analyst workspace user"
-id -u analyst >/dev/null 2>&1 || useradd -m -s /bin/bash analyst
-echo "analyst ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/analyst
-chmod 440 /etc/sudoers.d/analyst
-loginctl enable-linger analyst 2>/dev/null || true
-
-mkdir -p /work /work/samples /work/cases
+msg_info "Creating analyst user"
+useradd -m -s /bin/bash analyst
+# The linger file is what loginctl enable-linger writes; written directly it
+# also works in the VM build, where logind isn't running.
+mkdir -p /var/lib/systemd/linger
+touch /var/lib/systemd/linger/analyst
+echo 'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"' >>/home/analyst/.profile
+mkdir -p /work/samples /work/cases
 chown -R analyst:analyst /work
-msg_ok "Created analyst user and /work environment"
+cat <<'EOF' >/etc/default/re-agent
+HOME=/home/analyst
+PATH=/home/analyst/.local/bin:/opt/ghidra/support:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+GHIDRA_INSTALL_DIR=/opt/ghidra
+GHIDRA_HEADLESS_MAXMEM=4G
+EOF
+cat <<'EOF' >/etc/profile.d/re-agent.sh
+export GHIDRA_INSTALL_DIR=/opt/ghidra
+export GHIDRA_HEADLESS_MAXMEM=4G
+export PATH="$PATH:/opt/ghidra/support"
+EOF
+touch /etc/default/re-agent-proxy
+msg_ok "Created analyst user"
 
-msg_info "Installing Hermes Agent for analyst"
-su - analyst -c '
-  mkdir -p ~/.hermes
-  curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh -o /tmp/hermes-install.sh 2>/dev/null || true
-  if [[ -f /tmp/hermes-install.sh ]]; then
-    bash /tmp/hermes-install.sh --skip-setup --hermes-home ~/.hermes --dir ~/.hermes/hermes-agent >/dev/null 2>&1 || true
-    rm -f /tmp/hermes-install.sh
-  fi
+# The VM script asks this on the host: the VM build has no terminal to ask on.
+if [[ "${DEPLOY_TARGET:-}" != "vm" ]]; then
+  confirm_external_installer "https://hermes-agent.nousresearch.com/" "https://hermes-agent.nousresearch.com/install.sh"
+fi
+
+msg_info "Installing Hermes Agent"
+curl_with_retry "https://hermes-agent.nousresearch.com/install.sh" /tmp/hermes-install.sh ||
+  curl_with_retry "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh" /tmp/hermes-install.sh
+$STD setsid --wait bash -c '
+  set -a; source /etc/default/re-agent; set +a
+  export npm_config_yes=true
+  bash /tmp/hermes-install.sh --skip-setup --hermes-home /home/analyst/.hermes --dir /home/analyst/.hermes/hermes-agent
 '
+rm -f /tmp/hermes-install.sh
+API_SERVER_KEY=$(random_password 32)
+cat <<EOF >/home/analyst/.hermes/.env
+API_SERVER_ENABLED=true
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8642
+API_SERVER_KEY=${API_SERVER_KEY}
+EOF
+chown -R analyst:analyst /home/analyst
+chmod 750 /home/analyst
+chmod 700 /home/analyst/.hermes
+chmod 600 /home/analyst/.hermes/.env
+git config --system --add safe.directory /home/analyst/.hermes/hermes-agent
+msg_ok "Installed Hermes Agent"
 
-# Prewire REA plugin into Hermes Agent
-su - analyst -c '
-  export PATH=$PATH:~/.local/bin
-  if command -v hermes >/dev/null 2>&1; then
-    hermes plugins install rea >/dev/null 2>&1 || true
+msg_info "Installing Hermes plugins"
+# Catalog plugins install at the commit SHA Nous reviewed. rea registers REA's
+# MCP server and skill; bubblewrap sandboxes every command the agent runs;
+# holographic is a local SQLite memory whose search by meaning can be pointed at
+# an embeddings API later (re-agent-config embeddings).
+for plugin in rea bubblewrap holographic; do
+  if ! su - analyst -c "set -a; source /etc/default/re-agent; set +a; hermes plugins install ${plugin} --enable --yes-deps" >>/var/log/re-agent-plugins.log 2>&1; then
+    msg_warn "Hermes plugin '${plugin}' did not install (see /var/log/re-agent-plugins.log)"
   fi
-'
+done
+su - analyst -c 'set -a; source /etc/default/re-agent; set +a; hermes config set memory.provider holographic' >>/var/log/re-agent-plugins.log 2>&1 || true
+# bwrap needs user namespaces, which an unprivileged LXC usually can't nest.
+if [[ "${DEPLOY_TARGET:-}" == "vm" ]]; then
+  su - analyst -c 'set -a; source /etc/default/re-agent; set +a; hermes config set terminal.backend bubblewrap' >>/var/log/re-agent-plugins.log 2>&1 || true
+fi
+# The rea plugin starts its pinned rea-agents through npx. Fetch it now, while
+# the npm registry is reachable: under quarantine it is not.
+REA_SPEC=$(grep -rhoE 'rea-agents@[0-9][0-9.]*' /home/analyst/.hermes/plugins/rea 2>/dev/null | head -n1 || true)
+if [[ -n "$REA_SPEC" ]]; then
+  su - analyst -c "npx -y ${REA_SPEC} --version" >>/var/log/re-agent-plugins.log 2>&1 || true
+fi
+chown -R analyst:analyst /home/analyst
+msg_ok "Installed Hermes plugins"
 
-# Configure Hermes systemd services
-cat << EOF > /etc/systemd/system/hermes-dashboard.service
+msg_info "Creating Hermes dashboard service"
+cat <<EOF >/etc/systemd/system/hermes-dashboard.service
 [Unit]
 Description=Hermes Agent Web Dashboard
 After=network-online.target
@@ -286,261 +147,553 @@ Wants=network-online.target
 Type=simple
 User=analyst
 Group=analyst
+UMask=0077
 WorkingDirectory=/home/analyst
-ExecStart=/home/analyst/.local/bin/hermes dashboard --host 0.0.0.0 --port 9119 --no-open
+ExecStart=/home/analyst/.local/bin/hermes dashboard --host 127.0.0.1 --port 9119 --no-open
+EnvironmentFile=/etc/default/re-agent
+EnvironmentFile=-/etc/default/re-agent-proxy
 Restart=on-failure
 RestartSec=5
-Environment=PATH=/home/analyst/.local/bin:/usr/local/bin:/usr/bin:/bin:/opt/ghidra/support
-Environment=GHIDRA_INSTALL_DIR=/opt/ghidra
-Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 
 [Install]
 WantedBy=multi-user.target
 EOF
+systemctl enable -q --now hermes-dashboard
+msg_ok "Created Hermes dashboard service"
 
-cat << EOF > /etc/systemd/system/hermes-gateway.service
-[Unit]
-Description=Hermes Agent Gateway API Server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=analyst
-Group=analyst
-WorkingDirectory=/home/analyst
-ExecStart=/home/analyst/.local/bin/hermes gateway run
-Restart=on-failure
-RestartSec=5
-Environment=PATH=/home/analyst/.local/bin:/usr/local/bin:/usr/bin:/bin:/opt/ghidra/support
-Environment=GHIDRA_INSTALL_DIR=/opt/ghidra
-Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable hermes-dashboard.service >/dev/null 2>&1 || true
-systemctl start hermes-dashboard.service >/dev/null 2>&1 || true
-msg_ok "Configured Hermes Agent with REA plugin on ports 9119 and 8642"
-
-# ------------------------------------------------------------------------------
-# 7. Stateless Case Manager CLI (/usr/local/bin/rea-case)
-# ------------------------------------------------------------------------------
-msg_info "Deploying Stateless Case Directory Orchestrator (rea-case)"
-cat << 'REACASE' > /usr/local/bin/rea-case
+msg_info "Creating setup helper"
+cat <<'EOF' >/usr/local/bin/re-agent-setup
 #!/usr/bin/env bash
+# Configures the model provider, then starts the gateway API on port 8642.
 set -e
+su - analyst -c 'set -a; source /etc/default/re-agent; [ -s /etc/default/re-agent-proxy ] && source /etc/default/re-agent-proxy; set +a; hermes setup'
+chown -R analyst:analyst /home/analyst
+chmod 700 /home/analyst/.hermes
+if [[ -f /home/analyst/.config/systemd/user/hermes-gateway.service ]]; then
+  su - analyst -c 'systemctl --user enable --now hermes-gateway'
+  echo "Gateway API: port 8642, key in /home/analyst/.hermes/.env"
+else
+  echo "No gateway service was installed. Run re-agent-setup again and choose 'user service' for the gateway."
+fi
+echo "To add an OpenAI-compatible provider or a memory embeddings API (and let it through the quarantine):"
+echo "  re-agent-config provider add <name> <base_url> [default_model]"
+echo "  re-agent-config embeddings <base_url> <model>"
+EOF
+chmod 755 /usr/local/bin/re-agent-setup
+msg_ok "Created setup helper"
+
+msg_info "Deploying case tools"
+cat <<'EOF' >/usr/local/bin/re-casebook
+#!/usr/bin/env python3
+"""Evidence ledger for RE-Agent cases: a claim is accepted only when every
+evidence id it cites has been recorded in the case's casebook.json."""
+import json
+import os
+import sys
+import time
+
+
+def _path(case_dir):
+    return os.path.join(case_dir, "casebook.json")
+
+
+def _load(case_dir):
+    path = _path(case_dir)
+    if not os.path.exists(path):
+        sys.exit(f"[ERROR] Casebook not found at {path}")
+    with open(path) as f:
+        return json.load(f)
+
+
+def _save(case_dir, data):
+    with open(_path(case_dir), "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def init(case_dir, sample):
+    os.makedirs(case_dir, exist_ok=True)
+    if not os.path.exists(_path(case_dir)):
+        _save(case_dir, {"sample": os.path.abspath(sample), "created_at": time.time(), "evidence": {}, "verified_claims": []})
+    print(f"[CASEBOOK] Initialized {_path(case_dir)}")
+
+
+def record(case_dir, evidence_id, category, content, offset=None):
+    data = _load(case_dir)
+    data["evidence"][evidence_id] = {"category": category, "content": content, "offset": offset, "timestamp": time.time()}
+    _save(case_dir, data)
+    print(f"[CASEBOOK] Recorded evidence: {evidence_id}")
+
+
+def verify(case_dir, claim, evidence_ids):
+    data = _load(case_dir)
+    missing = [e for e in evidence_ids if e not in data["evidence"]]
+    if missing:
+        print(f"[REJECTED] Missing evidence ids: {missing}", file=sys.stderr)
+        return False
+    data["verified_claims"].append({"claim": claim, "evidence_ids": evidence_ids, "timestamp": time.time()})
+    _save(case_dir, data)
+    print(f"[ACCEPTED] Claim verified with {len(evidence_ids)} citations.")
+    return True
+
+
+USAGE = "Usage: re-casebook init <case_dir> <sample> | record <case_dir> <id> <category> <content> [offset] | verify <case_dir> <claim> <id,id,...>"
+
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    if len(args) >= 3 and args[0] == "init":
+        init(args[1], args[2])
+    elif len(args) >= 5 and args[0] == "record":
+        record(args[1], args[2], args[3], args[4], args[5] if len(args) > 5 else None)
+    elif len(args) >= 4 and args[0] == "verify":
+        sys.exit(0 if verify(args[1], args[2], args[3].split(",")) else 1)
+    else:
+        sys.exit(USAGE)
+EOF
+chmod 755 /usr/local/bin/re-casebook
+
+cat <<'REACASE' >/usr/local/bin/rea-case
+#!/usr/bin/env bash
+set -euo pipefail
 
 COMMAND="${1:-help}"
 SAMPLE="${2:-}"
+CASE_DIR="/work/cases/$(basename "${SAMPLE:-none}")"
 
-function usage() {
-  echo "Usage: rea-case <command> [sample_file]"
-  echo ""
-  echo "Commands:"
-  echo "  new <file>      Initialize a new stateless case directory and run automated triage"
-  echo "  status <sample> Show current verified claims, findings, and hypothesis queue"
-  echo "  export <sample> Export structured casebook to Markdown report"
-  echo "  clean           Purge temporary decompilation and IDA/Ghidra lock files"
+usage() {
+  echo "Usage: rea-case <command> [sample]"
+  echo "  new <file>       Create a case directory and run hashes, CAPA and FLOSS"
+  echo "  status <sample>  Show the case metadata and verified claims"
+  echo "  export <sample>  Write FINAL_REPORT.md from the investigation plan"
+  echo "  clean            Remove Ghidra lock files under /work"
   exit 1
 }
 
-case "$COMMAND" in
-  new)
-    if [[ -z "$SAMPLE" || ! -f "$SAMPLE" ]]; then
-      echo "Error: Target binary sample not found: $SAMPLE"
-      exit 1
-    fi
-    SAMPLE_NAME=$(basename "$SAMPLE")
-    CASE_DIR="/work/cases/${SAMPLE_NAME}"
-    mkdir -p "$CASE_DIR"
-
-    echo "==> [1/5] Calculating hashes..."
-    MD5=$(md5sum "$SAMPLE" | awk '{print $1}')
-    SHA256=$(sha256sum "$SAMPLE" | awk '{print $1}')
-    FILE_TYPE=$(file -b "$SAMPLE")
-    FILE_SIZE=$(stat -c%s "$SAMPLE")
-
-    cat << EOF > "$CASE_DIR/metadata.json"
-{
-  "sample_name": "$SAMPLE_NAME",
-  "file_path": "$SAMPLE",
-  "file_size_bytes": $FILE_SIZE,
-  "file_type": "$FILE_TYPE",
-  "md5": "$MD5",
-  "sha256": "$SHA256",
-  "created_at": $(date +%s)
+need_case() {
+  [[ -d "$CASE_DIR" ]] || {
+    echo "Error: case directory not found: $CASE_DIR"
+    exit 1
+  }
 }
-EOF
 
-    echo "==> [2/5] Initializing REA Casebook..."
-    /usr/local/bin/rea-casebook init "$CASE_DIR" "$SAMPLE"
+case "$COMMAND" in
+new)
+  [[ -n "$SAMPLE" && -f "$SAMPLE" ]] || {
+    echo "Error: sample not found: $SAMPLE"
+    exit 1
+  }
+  mkdir -p "$CASE_DIR"
+  echo "==> [1/4] Hashing"
+  SHA256=$(sha256sum "$SAMPLE" | awk '{print $1}')
+  FILE_TYPE=$(file -b "$SAMPLE")
+  jq -n \
+    --arg name "$(basename "$SAMPLE")" \
+    --arg path "$(realpath "$SAMPLE")" \
+    --arg type "$FILE_TYPE" \
+    --arg md5 "$(md5sum "$SAMPLE" | awk '{print $1}')" \
+    --arg sha256 "$SHA256" \
+    --argjson size "$(stat -c%s "$SAMPLE")" \
+    --argjson created "$(date +%s)" \
+    '{sample_name: $name, file_path: $path, file_size_bytes: $size, file_type: $type, md5: $md5, sha256: $sha256, created_at: $created}' \
+    >"$CASE_DIR/metadata.json"
+  echo "==> [2/4] Initializing casebook"
+  re-casebook init "$CASE_DIR" "$SAMPLE"
+  echo "==> [3/4] CAPA and FLOSS"
+  capa -q "$SAMPLE" >"$CASE_DIR/capa_triage.txt" 2>&1 || echo "    capa reported an error, see capa_triage.txt"
+  floss --quiet "$SAMPLE" >"$CASE_DIR/floss_strings.txt" 2>&1 || echo "    floss reported an error, see floss_strings.txt"
+  echo "==> [4/4] Writing investigation plan"
+  cat <<EOF >"$CASE_DIR/investigation_plan.md"
+# Investigation Plan: $(basename "$SAMPLE")
 
-    echo "==> [3/5] Running CAPA capability detection..."
-    if command -v capa >/dev/null 2>&1; then
-      capa -q "$SAMPLE" > "$CASE_DIR/capa_triage.txt" 2>&1 || true
-    fi
-
-    echo "==> [4/5] Extracting deobfuscated strings (FLOSS)..."
-    if command -v floss >/dev/null 2>&1; then
-      floss --quiet "$SAMPLE" > "$CASE_DIR/floss_strings.txt" 2>&1 || true
-    fi
-
-    echo "==> [5/5] Generating initial stateless investigation plan..."
-    cat << EOF > "$CASE_DIR/investigation_plan.md"
-# Investigation Plan: $SAMPLE_NAME
-
-## Metadata
 - **Type**: $FILE_TYPE
-- **Size**: $FILE_SIZE bytes
 - **SHA256**: \`$SHA256\`
+- Capabilities: \`capa_triage.txt\`
+- Strings: \`floss_strings.txt\`
 
-## Triage Summary
-- Capabilities detected in \`capa_triage.txt\`
-- Deobfuscated strings in \`floss_strings.txt\`
-
-## Hypothesis Queue (Episodic Subtasks)
-- [ ] Subtask 1: Parse entry point and imports
-- [ ] Subtask 2: Identify decryptors, unpacking loops, and strings
-- [ ] Subtask 3: Analyze C2 communication and protocol framing
-- [ ] Subtask 4: Map persistence or privilege escalation mechanisms
+## Hypothesis Queue
+- [ ] Entry point and imports
+- [ ] Decryptors, unpacking loops and strings
+- [ ] C2 communication and protocol framing
+- [ ] Persistence and privilege escalation
 
 ## Verified Findings
-*(All findings must cite verified evidence_id from casebook.json)*
+Every finding must cite an evidence id recorded in casebook.json.
 EOF
-
-    echo "==> Case initialized at: $CASE_DIR"
-    echo "    Agents can now inspect with zero context memory bloat."
-    ;;
-
-  status)
-    SAMPLE_NAME=$(basename "$SAMPLE")
-    CASE_DIR="/work/cases/${SAMPLE_NAME}"
-    if [[ ! -d "$CASE_DIR" ]]; then
-      echo "Error: Case directory not found: $CASE_DIR"
-      exit 1
-    fi
-    echo "=== Case Status: $SAMPLE_NAME ==="
-    cat "$CASE_DIR/metadata.json" | jq .
-    if [[ -f "$CASE_DIR/casebook.json" ]]; then
-      echo ""
-      echo "Verified Claims:"
-      jq '.verified_claims' "$CASE_DIR/casebook.json"
-    fi
-    ;;
-
-  export)
-    SAMPLE_NAME=$(basename "$SAMPLE")
-    CASE_DIR="/work/cases/${SAMPLE_NAME}"
-    REPORT_FILE="$CASE_DIR/FINAL_REPORT.md"
-    echo "# Clean-Room Technical Report: $SAMPLE_NAME" > "$REPORT_FILE"
-    echo "Generated: $(date)" >> "$REPORT_FILE"
-    echo "" >> "$REPORT_FILE"
-    cat "$CASE_DIR/investigation_plan.md" >> "$REPORT_FILE"
-    echo "Report exported to $REPORT_FILE"
-    ;;
-
-  clean)
-    find /work -name "*.lock" -delete 2>/dev/null || true
-    find /work -name "*.gpr" -delete 2>/dev/null || true
-    echo "Purged temporary locks and caches."
-    ;;
-
-  *)
-    usage
-    ;;
+  echo "==> Case ready: $CASE_DIR"
+  ;;
+status)
+  need_case
+  jq . "$CASE_DIR/metadata.json"
+  echo "Verified claims:"
+  jq '.verified_claims' "$CASE_DIR/casebook.json"
+  ;;
+export)
+  need_case
+  {
+    echo "# Technical Report: $(basename "$SAMPLE")"
+    echo "Generated: $(date)"
+    echo
+    cat "$CASE_DIR/investigation_plan.md"
+    echo
+    echo "## Verified Claims"
+    jq -r '.verified_claims[] | "- \(.claim) (evidence: \(.evidence_ids | join(", ")))"' "$CASE_DIR/casebook.json"
+  } >"$CASE_DIR/FINAL_REPORT.md"
+  echo "Report written to $CASE_DIR/FINAL_REPORT.md"
+  ;;
+clean)
+  find /work -name "*.lock" -delete
+  echo "Removed lock files."
+  ;;
+*)
+  usage
+  ;;
 esac
 REACASE
-chmod +x /usr/local/bin/rea-case
-msg_ok "Deployed /usr/local/bin/rea-case"
+chmod 755 /usr/local/bin/rea-case
+msg_ok "Deployed case tools"
 
-# ------------------------------------------------------------------------------
-# 8. Network Quarantine & Egress Proxy Helper (/usr/local/bin/re-firewall)
-# ------------------------------------------------------------------------------
-msg_info "Deploying network isolation and egress proxy manager"
-cat << 'FIREWALL_SCRIPT' > /usr/local/bin/re-firewall
+msg_info "Deploying egress quarantine"
+mkdir -p /etc/re-agent
+cat <<'EOF' >/etc/re-agent/egress-allow
+# One host per line. Under quarantine these are the only hosts reachable,
+# through the proxy. Manage with: re-firewall allow|deny <host-or-url>
+api.anthropic.com
+api.openai.com
+openrouter.ai
+generativelanguage.googleapis.com
+EOF
+systemctl disable -q --now squid
+
+cat <<'FIREWALL' >/usr/local/sbin/re-firewall
 #!/usr/bin/env bash
-set -e
+# Egress quarantine for RE-Agent. Root only: the analyst user has no sudo, so
+# nothing running as analyst (Hermes, tools, samples) can lift it.
+set -euo pipefail
 
-ACTION="${1:-status}"
-PROXY_IP="${2:-10.99.0.1}"
-PROXY_PORT="${3:-8080}"
+STATE=/etc/re-agent/firewall.conf
+ALLOW=/etc/re-agent/egress-allow
+PROXY_ENV=/etc/default/re-agent-proxy
+HOST_CONF=/opt/re-agent/host-egress-proxy.conf
+CHAIN=RE_EGRESS
+LOCAL_PORT=3128
 
-case "$ACTION" in
-  isolate)
-    echo "==> Enforcing strict network quarantine..."
-    ANALYST_UID=$(id -u analyst 2>/dev/null || echo 1000)
+usage() {
+  cat <<'USAGE'
+Usage: re-firewall <command>
+  isolate local                Quarantine through a proxy inside this guest (Squid on 127.0.0.1:3128)
+  isolate <proxy_ip> [port]    Quarantine through a proxy you run on the host or a gateway
+  unmask                       Lift the quarantine
+  allow <host-or-url>          Allow a host through the proxy (e.g. https://llm.example.com/v1)
+  deny <host>                  Remove a host from the allowlist
+  list                         Show the allowlist
+  apply                        Re-apply the saved state (run at boot)
+  status                       Show the mode and rules
+USAGE
+  exit 1
+}
 
-    # Flush current custom chains
-    iptables -F OUTPUT 2>/dev/null || true
-
-    # Allow loopback unconditionally
-    iptables -A OUTPUT -o lo -j ACCEPT
-
-    # Allow established connections
-    iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-    # Allow ONLY the analyst user to reach the designated Egress Proxy
-    iptables -A OUTPUT -p tcp -m owner --uid-owner "$ANALYST_UID" -d "$PROXY_IP" --dport "$PROXY_PORT" -j ACCEPT
-
-    # Block all private LAN subnets (RFC 1918)
-    iptables -A OUTPUT -d 10.0.0.0/8 -j DROP
-    iptables -A OUTPUT -d 172.16.0.0/12 -j DROP
-    iptables -A OUTPUT -d 192.168.0.0/16 -j DROP
-
-    # Drop all other outbound traffic from any user, sandbox, or dynamic process
-    iptables -A OUTPUT -j DROP
-
-    echo "==> Quarantine ACTIVE: Only UID $ANALYST_UID can egress to $PROXY_IP:$PROXY_PORT (LLM Proxy)."
-    echo "    All other outbound traffic and LAN packets are BLOCKED."
-    ;;
-
-  unmask)
-    echo "==> Restoring default unrestricted networking..."
-    iptables -F OUTPUT 2>/dev/null || true
-    iptables -P OUTPUT ACCEPT 2>/dev/null || true
-    echo "==> Network unmasked (development / update mode)."
-    ;;
-
-  status)
-    echo "=== Outbound Firewall Filter Status ==="
-    iptables -L OUTPUT -v -n --line-numbers
-    ;;
-
-  *)
-    echo "Usage: re-firewall [isolate <proxy_ip> <proxy_port> | unmask | status]"
+normalize_host() {
+  local h="${1,,}"
+  h="${h#*://}"
+  h="${h%%/*}"
+  h="${h%%:*}"
+  [[ "$h" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && "$h" == *.* ]] || {
+    echo "Not a host name: $1" >&2
     exit 1
-    ;;
+  }
+  echo "$h"
+}
+
+allowed_hosts() {
+  grep -vE '^\s*(#|$)' "$ALLOW" 2>/dev/null | sort -u
+}
+
+write_proxy_confs() {
+  local hosts h
+  hosts=$(allowed_hosts)
+  {
+    echo "# Generated by re-firewall from ${ALLOW}. Squid config for the egress proxy on the"
+    echo "# Proxmox host or a gateway: HTTPS CONNECT to the allowed hosts only."
+    echo "http_port 8080"
+    for h in $hosts; do echo "acl re_agent_allowed dstdomain ${h}"; done
+    echo "acl SSL_ports port 443"
+    echo "http_access deny !SSL_ports"
+    echo "http_access deny CONNECT !SSL_ports"
+    echo "http_access allow CONNECT re_agent_allowed"
+    echo "http_access deny all"
+  } >"$HOST_CONF"
+  {
+    echo "# Generated by re-firewall. Local egress proxy for RE-Agent quarantine."
+    echo "http_port 127.0.0.1:${LOCAL_PORT}"
+    for h in $hosts; do echo "acl re_agent_allowed dstdomain ${h}"; done
+    echo "acl SSL_ports port 443"
+    echo "http_access deny !SSL_ports"
+    echo "http_access deny CONNECT !SSL_ports"
+    echo "http_access allow localhost CONNECT re_agent_allowed"
+    echo "http_access deny all"
+    echo "cache deny all"
+    echo "access_log stdio:/var/log/squid/access.log"
+    echo "coredump_dir /var/spool/squid"
+  } >/etc/squid/squid.conf
+}
+
+flush_chain() {
+  local ipt="$1"
+  command -v "$ipt" >/dev/null 2>&1 || return 0
+  "$ipt" -D OUTPUT -j "$CHAIN" 2>/dev/null || true
+  "$ipt" -F "$CHAIN" 2>/dev/null || true
+  "$ipt" -X "$CHAIN" 2>/dev/null || true
+}
+
+apply_rules() {
+  local proxy="$1" port="$2" uid
+  uid=$(id -u analyst)
+  flush_chain iptables
+  flush_chain ip6tables
+
+  iptables -N "$CHAIN"
+  iptables -A "$CHAIN" -o lo -j ACCEPT
+  iptables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+  iptables -A "$CHAIN" -p udp --sport 68 --dport 67 -j ACCEPT
+  if [[ "$proxy" == "local" ]]; then
+    # Only Squid itself goes out, and it enforces the allowlist.
+    iptables -A "$CHAIN" -m owner --uid-owner proxy -p udp --dport 53 -j ACCEPT
+    iptables -A "$CHAIN" -m owner --uid-owner proxy -p tcp --dport 53 -j ACCEPT
+    iptables -A "$CHAIN" -m owner --uid-owner proxy -p tcp --dport 443 -j ACCEPT
+    # Squid may resolve through systemd-resolved's stub, which then needs out too.
+    if id systemd-resolve >/dev/null 2>&1; then
+      iptables -A "$CHAIN" -m owner --uid-owner systemd-resolve -p udp --dport 53 -j ACCEPT
+      iptables -A "$CHAIN" -m owner --uid-owner systemd-resolve -p tcp --dport 53 -j ACCEPT
+    fi
+  else
+    iptables -A "$CHAIN" -p tcp -m owner --uid-owner "$uid" -d "$proxy" --dport "$port" -j ACCEPT
+  fi
+  iptables -A "$CHAIN" -j DROP
+  iptables -I OUTPUT 1 -j "$CHAIN"
+
+  # IPv6 has no proxy path, so everything but loopback and replies is dropped.
+  if command -v ip6tables >/dev/null 2>&1; then
+    ip6tables -N "$CHAIN"
+    ip6tables -A "$CHAIN" -o lo -j ACCEPT
+    ip6tables -A "$CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    ip6tables -A "$CHAIN" -j DROP
+    ip6tables -I OUTPUT 1 -j "$CHAIN"
+  else
+    echo "Warning: ip6tables not found, IPv6 egress is NOT blocked" >&2
+  fi
+
+  local url="http://${proxy}:${port}"
+  if [[ "$proxy" == "local" ]]; then
+    url="http://127.0.0.1:${LOCAL_PORT}"
+    write_proxy_confs
+    systemctl enable -q --now squid
+    systemctl reload squid 2>/dev/null || systemctl restart squid
+  fi
+  printf 'HTTPS_PROXY=%s\nHTTP_PROXY=%s\nNO_PROXY=127.0.0.1,localhost\n' "$url" "$url" >"$PROXY_ENV"
+}
+
+restart_hermes() {
+  systemctl restart hermes-dashboard 2>/dev/null || true
+  su - analyst -c 'systemctl --user try-restart hermes-gateway' 2>/dev/null || true
+}
+
+mode() {
+  local MODE=open PROXY_IP=""
+  # shellcheck disable=SC1090
+  [[ -f "$STATE" ]] && source "$STATE"
+  echo "${MODE}:${PROXY_IP}"
+}
+
+[[ $EUID -eq 0 ]] || {
+  echo "re-firewall must run as root" >&2
+  exit 1
+}
+mkdir -p "$(dirname "$STATE")"
+
+case "${1:-status}" in
+isolate)
+  [[ -n "${2:-}" ]] || usage
+  port="${3:-8080}"
+  [[ "$2" == "local" ]] && port="$LOCAL_PORT"
+  printf 'MODE=isolate\nPROXY_IP=%s\nPROXY_PORT=%s\n' "$2" "$port" >"$STATE"
+  apply_rules "$2" "$port"
+  restart_hermes
+  echo "Quarantine active through ${2}:${port}; allowed hosts: $(allowed_hosts | paste -sd' ')."
+  echo "It persists across reboots. Lift it with: re-firewall unmask"
+  ;;
+unmask)
+  echo "MODE=open" >"$STATE"
+  flush_chain iptables
+  flush_chain ip6tables
+  systemctl disable -q --now squid 2>/dev/null || true
+  : >"$PROXY_ENV"
+  restart_hermes
+  echo "Quarantine lifted."
+  ;;
+allow | deny)
+  [[ -n "${2:-}" ]] || usage
+  host=$(normalize_host "$2")
+  if [[ "$1" == "allow" ]]; then
+    grep -qxF "$host" "$ALLOW" || echo "$host" >>"$ALLOW"
+    echo "Allowed ${host}."
+  else
+    sed -i "/^${host//./\\.}\$/d" "$ALLOW"
+    echo "Removed ${host}."
+  fi
+  write_proxy_confs
+  case "$(mode)" in
+  isolate:local) systemctl reload squid ;;
+  isolate:*) echo "Copy ${HOST_CONF} to your host proxy and reload it to apply this there." ;;
+  esac
+  ;;
+list)
+  allowed_hosts
+  ;;
+apply)
+  [[ -f "$STATE" ]] || exit 0
+  # shellcheck disable=SC1090
+  source "$STATE"
+  if [[ "${MODE:-open}" == "isolate" ]]; then
+    apply_rules "$PROXY_IP" "$PROXY_PORT"
+  fi
+  ;;
+status)
+  if [[ -f "$STATE" ]]; then cat "$STATE"; else echo "MODE=open"; fi
+  echo "Allowed hosts: $(allowed_hosts | paste -sd' ')"
+  iptables -L "$CHAIN" -v -n --line-numbers 2>/dev/null || echo "IPv4: no quarantine rules"
+  ip6tables -L "$CHAIN" -v -n --line-numbers 2>/dev/null || echo "IPv6: no quarantine rules"
+  ;;
+*)
+  usage
+  ;;
 esac
-FIREWALL_SCRIPT
-chmod +x /usr/local/bin/re-firewall
-msg_ok "Deployed /usr/local/bin/re-firewall"
+FIREWALL
+chmod 700 /usr/local/sbin/re-firewall
 
-# ------------------------------------------------------------------------------
-# 9. Host-Side Proxy Template
-# ------------------------------------------------------------------------------
+cat <<'EOF' >/etc/systemd/system/re-firewall.service
+[Unit]
+Description=RE-Agent egress quarantine
+Before=network-pre.target hermes-dashboard.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/re-firewall apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl enable -q re-firewall
+
+cat <<'CONFIG' >/usr/local/sbin/re-agent-config
+#!/usr/bin/env bash
+# Adds model providers and the memory embeddings endpoint to Hermes, and lets
+# their hosts through the egress quarantine. Keys are read from the terminal,
+# never from the command line, and stored in /home/analyst/.hermes/.env.
+set -euo pipefail
+
+ENV_FILE=/home/analyst/.hermes/.env
+
+usage() {
+  cat <<'USAGE'
+Usage: re-agent-config <command>
+  provider add <name> <base_url> [default_model]   Add an OpenAI-compatible provider (e.g. heretek https://llm.heretek.one/v1)
+  provider list                                     List configured providers
+  embeddings <base_url> <model>                     Turn on memory search by meaning through an embeddings API
+  embeddings off                                    Turn it off (memory stays local)
+USAGE
+  exit 1
+}
+
+hermes_cfg() {
+  runuser -u analyst -- env HOME=/home/analyst PATH=/home/analyst/.local/bin:/usr/local/bin:/usr/bin:/bin \
+    /home/analyst/.local/bin/hermes config "$@"
+}
+
+store_key() {
+  local var="$1" key
+  read -rsp "API key for ${2} (leave empty for none): " key
+  echo
+  [[ -n "$key" ]] || return 1
+  touch "$ENV_FILE"
+  sed -i "/^${var}=/d" "$ENV_FILE"
+  printf '%s=%s\n' "$var" "$key" >>"$ENV_FILE"
+  chown analyst:analyst "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+}
+
+check_url() {
+  [[ "$1" =~ ^https://[^/]+ ]] || {
+    echo "Use an https:// URL: $1" >&2
+    exit 1
+  }
+}
+
+restart_hermes() {
+  systemctl restart hermes-dashboard 2>/dev/null || true
+  su - analyst -c 'systemctl --user try-restart hermes-gateway' 2>/dev/null || true
+}
+
+[[ $EUID -eq 0 ]] || {
+  echo "re-agent-config must run as root" >&2
+  exit 1
+}
+
+case "${1:-}" in
+provider)
+  case "${2:-}" in
+  add)
+    name="${3:-}" url="${4:-}" model="${5:-}"
+    [[ "$name" =~ ^[a-z0-9][a-z0-9_-]*$ && -n "$url" ]] || usage
+    check_url "$url"
+    var="RE_PROVIDER_${name^^}_KEY"
+    var="${var//-/_}"
+    entry=$(jq -cn --arg api "$url" --arg model "$model" '{api: $api} + (if $model == "" then {} else {default_model: $model} end)')
+    if store_key "$var" "$name"; then
+      entry=$(jq -c --arg k "$var" '. + {key_env: $k}' <<<"$entry")
+    fi
+    hermes_cfg set "providers.${name}" "$entry"
+    re-firewall allow "$url"
+    restart_hermes
+    echo "Added provider '${name}'. Pick it with /model in Hermes, or: hermes config set model.provider ${name}"
+    ;;
+  list)
+    hermes_cfg get providers 2>/dev/null || grep -A20 '^providers:' /home/analyst/.hermes/config.yaml || echo "No providers configured."
+    ;;
+  *) usage ;;
+  esac
+  ;;
+embeddings)
+  if [[ "${2:-}" == "off" ]]; then
+    hermes_cfg set plugins.hermes-memory-store.embeddings off
+    restart_hermes
+    echo "Memory search by meaning is off; memory stays local."
+    exit 0
+  fi
+  url="${2:-}" model="${3:-}"
+  [[ -n "$url" && -n "$model" ]] || usage
+  check_url "$url"
+  hermes_cfg set plugins.hermes-memory-store.embeddings on
+  hermes_cfg set plugins.hermes-memory-store.embedding_url "$url"
+  hermes_cfg set plugins.hermes-memory-store.embedding_model "$model"
+  if store_key RE_EMBEDDINGS_KEY "the embeddings API"; then
+    hermes_cfg set plugins.hermes-memory-store.embedding_key_env RE_EMBEDDINGS_KEY
+  fi
+  re-firewall allow "$url"
+  restart_hermes
+  echo "Memory search by meaning uses ${model} at ${url}. Fact texts and messages are sent there."
+  ;;
+*)
+  usage
+  ;;
+esac
+CONFIG
+chmod 700 /usr/local/sbin/re-agent-config
 mkdir -p /opt/re-agent
-cat << 'PROXY_CONF' > /opt/re-agent/host-egress-proxy.conf
-# Sample Squid / Forward Proxy configuration for the Proxmox Host or Gateway
-# Restricts VM egress to whitelisted remote LLM providers only.
-http_port 8080
+# Writes the host proxy template and the local Squid config from the allowlist.
+/usr/local/sbin/re-firewall allow api.anthropic.com >/dev/null
+msg_ok "Deployed egress quarantine"
 
-acl allowed_llm dstdomain .anthropic.com
-acl allowed_llm dstdomain .openai.com
-acl allowed_llm dstdomain .openrouter.ai
-acl allowed_llm dstdomain .googleapis.com
-
-# Allow SSL connect only to LLM ports
-acl SSL_ports port 443
-acl Safe_ports port 443
-http_access deny !Safe_ports
-http_access deny CONNECT !SSL_ports
-
-# Enforce domain whitelist
-http_access allow allowed_llm
-http_access deny all
-PROXY_CONF
-
-msg_ok "Installation completed successfully!"
+motd_ssh
+customize
+cleanup_lxc

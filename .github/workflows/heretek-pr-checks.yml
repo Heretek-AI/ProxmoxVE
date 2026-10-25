@@ -51,8 +51,8 @@ jobs:
           git fetch --no-tags https://github.com/community-scripts/ProxmoxVE.git main
           upstream_base="$(git merge-base HEAD FETCH_HEAD)"
 
-          # Heretek scripts are the ct/ and install/ files upstream doesn't have.
-          mapfile -t heretek < <(git diff --name-only --diff-filter=A "$upstream_base" HEAD -- 'ct/*.sh' 'install/*.sh')
+          # Heretek scripts are the ct/, install/ and vm/ files upstream doesn't have.
+          mapfile -t heretek < <(git diff --name-only --diff-filter=A "$upstream_base" HEAD -- 'ct/*.sh' 'install/*.sh' 'vm/*.sh')
           if [ -n "${BASE_SHA:-}" ]; then
             mapfile -t touched < <(git diff --name-only "$BASE_SHA" HEAD)
             mapfile -t heretek < <(comm -12 <(printf '%s\n' "${heretek[@]}" | sort) <(printf '%s\n' "${touched[@]}" | sort))

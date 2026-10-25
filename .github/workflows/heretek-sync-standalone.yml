@@ -11,6 +11,7 @@ on:
     paths:
       - "ct/**"
       - "install/**"
+      - "vm/**"
       - ".github/workflows/heretek-sync-standalone.yml"
   workflow_dispatch:
 
@@ -51,9 +52,18 @@ jobs:
             cp "$script" standalone/ct/
             [[ -f "fork/install/${app}-install.sh" ]] && cp "fork/install/${app}-install.sh" standalone/install/
           done
+          # A Heretek VM script installs through the matching install/ script
+          # (core's vm-app.func), so it carries that across too.
+          for script in fork/vm/*.sh; do
+            grep -q 'COMMUNITY_SCRIPTS_URL:-https://raw.githubusercontent.com/Heretek-AI/' "$script" || continue
+            mkdir -p standalone/vm
+            cp "$script" standalone/vm/
+            app="$(basename "$script" -vm.sh)"
+            [[ -f "fork/install/${app}-install.sh" ]] && cp "fork/install/${app}-install.sh" standalone/install/
+          done
 
           echo "Synced scripts:"
-          ls standalone/ct
+          ls standalone/ct standalone/vm 2>/dev/null || true
 
       - name: Commit and push to standalone
         run: |

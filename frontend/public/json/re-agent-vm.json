@@ -14,7 +14,7 @@
   "website": "https://github.com/morluto/rea",
   "logo": null,
   "config_path": "/home/analyst/.hermes",
-  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, plus rea-case for evidence-backed case folders, re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
+  "description": "RE-Agent VM is the hardware-isolated variant of the RE-Agent appliance, built on a Debian or Ubuntu cloud image. Agentic reverse-engineering and malware-analysis workstation: Hermes Agent with the REA MCP server registered, Ghidra headless, OpenBin BINNY, CAPA, FLOSS, YARA, Detect It Easy, Radare2 and UPX, Ghidra and radare2 MCP servers, oletools and PDF tools for documents, box-js for scripts, jadx and androguard for Android, Sigma tooling, and RE skills for triage, deobfuscation, IOCs, detections and reports, plus rea-case for evidence-backed case folders and re-ioc for CSV and STIX 2.1 IOC export, re-firewall to restrict egress to an allowlist of LLM hosts, and a local memory store (holographic) with optional embeddings.",
   "install_methods": [
     {
       "type": "default",
@@ -47,6 +47,10 @@
     },
     {
       "text": "Run 'rea-case new <sample>' to start a case in /work/cases.",
+      "type": "info"
+    },
+    {
+      "text": "The agent's RE skills (re-triage, re-office-pdf, re-script-deobfuscate, re-ioc-extract, re-detection-write, re-report) are in /opt/re-agent/skills. The Ghidra and radare2 MCP servers run with no network and can only open files under /work.",
       "type": "info"
     },
     {

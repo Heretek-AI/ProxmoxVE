@@ -1,0 +1,64 @@
+{
+  "name": "RE-Agent",
+  "slug": "re-agent",
+  "categories": [
+    6,
+    20
+  ],
+  "date_created": "2026-10-24",
+  "type": "vm",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 9119,
+  "documentation": "https://github.com/alexmi256/rea-agent-docker",
+  "website": "https://github.com/morluto/rea",
+  "logo": null,
+  "config_path": "/work/cases",
+  "description": "RE-Agent is an automated, turnkey agentic reverse-engineering and malware analysis appliance. Features hardware QEMU/KVM virtualization, Hermes Agent with the official REA plugin, OpenBin BINNY RE harness, Ghidra 11.2+ headless, REA-Casebook for verified evidence tracking (zero-hallucination stateless case machine), static triage tools (CAPA, FLOSS, YARA, DIEC, Radare2), and a 4-layer whitelisted LLM egress firewall for safe isolated execution.",
+  "install_methods": [
+    {
+      "type": "vm",
+      "script": "vm/re-agent-vm.sh",
+      "resources": {
+        "cpu": 4,
+        "ram": 8192,
+        "hdd": 40,
+        "os": "Debian",
+        "version": "13"
+      }
+    },
+    {
+      "type": "ct",
+      "script": "ct/re-agent.sh",
+      "resources": {
+        "cpu": 4,
+        "ram": 8192,
+        "hdd": 40,
+        "os": "Debian",
+        "version": "13"
+      }
+    }
+  ],
+  "notes": [
+    {
+      "text": "Access the Hermes Agent Web Dashboard at http://<IP>:9119",
+      "type": "info"
+    },
+    {
+      "text": "Hermes Gateway API running on port 8642",
+      "type": "info"
+    },
+    {
+      "text": "Run 'rea-case new <sample_path>' inside the appliance to initiate an automated stateless triage and investigation",
+      "type": "info"
+    },
+    {
+      "text": "Run 're-firewall isolate <proxy_ip>' to engage strict network quarantine with whitelisted LLM egress only",
+      "type": "warning"
+    },
+    {
+      "text": "Create a pristine baseline snapshot after initial boot: qm snapshot <vmid> baseline-clean",
+      "type": "info"
+    }
+  ]
+}

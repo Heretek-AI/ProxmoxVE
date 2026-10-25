@@ -38,9 +38,19 @@ function update_script() {
     CLEAN_INSTALL=1 fetch_and_deploy_gh_release "binny" "openbin-ai/binny-releases" "prebuild" "latest" "/opt/binny" "binny-linux-amd64.tar.gz"
   fi
 
+  if check_for_gh_release "radare2" "radareorg/radare2"; then
+    fetch_and_deploy_gh_release "radare2" "radareorg/radare2" "binary" "latest" "" "radare2_*_amd64.deb"
+  fi
+
+  DIE_DISTRO=$(. /etc/os-release && echo "${ID^}_${VERSION_ID}")
+  if check_for_gh_release "die" "horsicq/DIE-engine"; then
+    fetch_and_deploy_gh_release "die" "horsicq/DIE-engine" "binary" "latest" "" "die_*_${DIE_DISTRO}_amd64.deb"
+  fi
+
   msg_info "Updating REA and triage tools"
   $STD npm update -g rea-agents
   $STD /opt/re-tools-venv/bin/pip install --upgrade flare-capa flare-floss yara-python pefile pyelftools r2pipe
+  [[ -x /usr/local/sbin/re-capa-rules ]] && $STD /usr/local/sbin/re-capa-rules
   msg_ok "Updated REA and triage tools"
 
   if [[ -x /home/analyst/.local/bin/hermes ]]; then

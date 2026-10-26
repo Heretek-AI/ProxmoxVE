@@ -45,8 +45,8 @@
       "type": "info"
     },
     {
-      "text": "The API listens on all interfaces with no API key. To require one, add --api-key <key> to GUFO_SERVER_ARGS in /opt/gufo/gufo.env.",
-      "type": "warning"
+      "text": "The API requires a key, generated at install. Find it inside the container with: cat ~/gufo.creds. Clients send it as a Bearer token.",
+      "type": "info"
     },
     {
       "text": "OpenAI-compatible API: http://<IP>:8080/v1",

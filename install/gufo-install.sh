@@ -62,7 +62,8 @@ $STD /usr/local/bin/gufo-build "$RELEASE"
 msg_ok "Built Gufo ${RELEASE}"
 
 msg_info "Configuring Gufo"
-cat <<'EOF' >/opt/gufo/gufo.env
+GUFO_API_KEY=$(random_password 32)
+cat <<EOF >/opt/gufo/gufo.env
 # Gufo server settings. Apply changes with: systemctl restart gufo
 # Options are listed by: gufo serve --help and gufo serve llm --help
 
@@ -76,12 +77,18 @@ GUFO_MODALITY=llm
 
 GUFO_HOST=0.0.0.0
 GUFO_PORT=8080
-# Server options before the modality, for example: --api-key SECRET --sessions 2
-GUFO_SERVER_ARGS=
+# Server options before the modality, for example: --sessions 2
+# Clients send the API key as: Authorization: Bearer <key>
+GUFO_SERVER_ARGS=--api-key ${GUFO_API_KEY}
 # Model options after the modality, for example:
 # --speculative dflash2 --dflash-model /opt/gufo/models/Qwen3.8-27B-DFlash2-Q4_K_M.gguf
 GUFO_ARGS=--context 32768
 EOF
+chmod 600 /opt/gufo/gufo.env
+{
+  echo "Gufo API key: ${GUFO_API_KEY}"
+  echo "Set in GUFO_SERVER_ARGS in /opt/gufo/gufo.env"
+} >~/gufo.creds
 
 cat <<'EOF' >/usr/local/bin/gufo-model-fetch
 #!/usr/bin/env bash

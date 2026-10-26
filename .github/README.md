@@ -79,6 +79,8 @@ These scripts are exclusive to this forge, focusing on AI/ML workloads and speci
 | Script | Description | Resources |
 |--------|-------------|-----------|
 | **[MCPHub](https://github.com/samanhappy/mcphub)** | Model Context Protocol Hub for AI tooling integration | 2 CPU / 2GB RAM |
+| **[Strata](https://github.com/Niko1221/Strata)** | Inference engine for Qwen3.8-Flash-Next with a Strix Halo HIP engine, OpenAI-compatible API | 8 CPU / 64GB RAM + Strix Halo GPU |
+| **[GSQHalo.cpp](https://github.com/Aristo94/GSQHalo.cpp)** | llama.cpp fork for GSQ-RCO Qwen3.8-Flash-Next on Strix Halo, own ROCm 7.14.1 | 8 CPU / 64GB RAM + Strix Halo GPU |
 | **[SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI)** | Stable Diffusion Swarm interface | 8 CPU / 16GB RAM + GPU |
 | **[LlamaCPP](https://github.com/ggml-org/llama.cpp)** | High-performance LLM inference engine with GPU acceleration | 4 CPU / 8GB RAM + GPU |
 | **[Gufo](https://github.com/gufo-org/gufo)** | Local inference engine tuned for AMD Strix Halo, OpenAI-compatible API | 8 CPU / 32GB RAM + Strix Halo GPU |

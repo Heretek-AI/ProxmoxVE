@@ -1,0 +1,60 @@
+{
+  "name": "GSQHalo.cpp",
+  "slug": "gsqhalo",
+  "categories": [
+    20
+  ],
+  "date_created": "2026-10-26",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 8080,
+  "documentation": "https://github.com/Aristo94/GSQHalo.cpp/blob/gsqhalo/docs/gsqhalo/README.md",
+  "website": "https://github.com/Aristo94/GSQHalo.cpp",
+  "logo": null,
+  "config_path": "/opt/gsqhalo/gsqhalo.env",
+  "description": "GSQHalo.cpp is a llama.cpp fork tuned for ISTA-DASLab's GSQ-RCO quantizations of Qwen3.8-Flash-Next on AMD Strix Halo (gfx1151), with faster prefill kernels, MTP that fits in memory and a KV cache on SSD. The script installs AMD's ROCm 7.14.1 for gfx1151 in its own prefix, builds the fork from source and serves llama-server's OpenAI-compatible API.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/gsqhalo.sh",
+      "resources": {
+        "cpu": 8,
+        "ram": 65536,
+        "hdd": 120,
+        "os": "debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "GSQHalo.cpp targets AMD Strix Halo (gfx1151) only. The container needs /dev/kfd and /dev/dri passed through, which the script sets up when GPU passthrough is enabled.",
+      "type": "warning"
+    },
+    {
+      "text": "The install builds from source, which takes about 20 minutes, and so does every update.",
+      "type": "info"
+    },
+    {
+      "text": "The first start downloads ISTA-DASLab's Qwen3.8-Flash-Next Coder IQ1_M (about 58 GB) and Unsloth's MTP head (about 4 GB). Follow it with: journalctl -fu gsqhalo",
+      "type": "info"
+    },
+    {
+      "text": "The API listens on all interfaces with no API key. To require one, add --api-key <key> to GSQHALO_ARGS in /opt/gsqhalo/gsqhalo.env.",
+      "type": "warning"
+    },
+    {
+      "text": "OpenAI-compatible API: http://<IP>:8080/v1",
+      "type": "info"
+    },
+    {
+      "text": "Change the model or server options in /opt/gsqhalo/gsqhalo.env, then run: systemctl restart gsqhalo",
+      "type": "info"
+    }
+  ]
+}

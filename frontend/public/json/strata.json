@@ -1,0 +1,64 @@
+{
+  "name": "Strata",
+  "slug": "strata",
+  "categories": [
+    20
+  ],
+  "date_created": "2026-10-26",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 8080,
+  "documentation": "https://github.com/Niko1221/Strata/blob/main/docs/TERMINAL_LAUNCH.md",
+  "website": "https://github.com/Niko1221/Strata",
+  "logo": "https://raw.githubusercontent.com/Niko1221/Strata/main/apps/host/public/brand/strata-mark-light.svg",
+  "config_path": "/opt/strata/strata.env",
+  "description": "Strata is an open source inference engine for Qwen3.8-Flash-Next and other large MoE models, with a Strix Halo (gfx1151) HIP engine, MTP drafting and an OpenAI-compatible API. The script installs the Strata Terminal, which downloads the signed engine for the GPU with its own HIP runtime, and serves ISTA-DASLab's Qwen3.8-Flash-Next Coder by default.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/strata.sh",
+      "resources": {
+        "cpu": 8,
+        "ram": 65536,
+        "hdd": 150,
+        "os": "debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "Strata's Strix Halo support is experimental upstream. The container needs /dev/kfd and /dev/dri passed through, which the script sets up when GPU passthrough is enabled.",
+      "type": "warning"
+    },
+    {
+      "text": "The install runs Strata's official Terminal installer from its GitHub release and asks before it does. Set var_external_installer=yes for unattended installs.",
+      "type": "info"
+    },
+    {
+      "text": "The first start downloads the engine and ISTA-DASLab's Qwen3.8-Flash-Next Coder IQ1_M (about 58 GB) and prepares it. Follow it with: journalctl -fu strata",
+      "type": "info"
+    },
+    {
+      "text": "The API needs a key. Show it from inside the container with: strata launch --show-key",
+      "type": "info"
+    },
+    {
+      "text": "OpenAI-compatible API: http://<IP>:8080/v1",
+      "type": "info"
+    },
+    {
+      "text": "Change the model or launch options in /opt/strata/strata.env, then run: systemctl restart strata",
+      "type": "info"
+    },
+    {
+      "text": "Strata counts free memory from inside the container, so give it enough RAM for the model: the Coder needs about 32 GB, the full IQ3_S about 62 GB.",
+      "type": "warning"
+    }
+  ]
+}

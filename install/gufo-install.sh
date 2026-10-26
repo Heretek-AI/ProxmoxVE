@@ -22,8 +22,13 @@ msg_ok "Installed Dependencies"
 
 # Gufo publishes no Linux binaries: its release build is the Nix flake output,
 # with ROCm and the patched ROCr prebuilt on gufo.cachix.org.
+confirm_external_installer "https://nixos.org/" "https://nixos.org/nix/install"
+
 msg_info "Installing Nix"
-$STD bash <(curl -fsSL https://nixos.org/nix/install) --daemon --yes
+NIX_INSTALLER=$(mktemp)
+curl -fsSL https://nixos.org/nix/install -o "$NIX_INSTALLER"
+$STD sh "$NIX_INSTALLER" --daemon --yes
+rm -f "$NIX_INSTALLER"
 cat <<EOF >>/etc/nix/nix.conf
 experimental-features = nix-command flakes
 sandbox = false

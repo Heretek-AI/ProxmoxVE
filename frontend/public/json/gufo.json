@@ -37,6 +37,10 @@
       "type": "warning"
     },
     {
+      "text": "The install runs the official Nix installer from nixos.org and asks before it does. Set var_external_installer=yes for unattended installs.",
+      "type": "info"
+    },
+    {
       "text": "The first start downloads Qwen3.8 27B Q4_K_XL (about 17 GB). Follow it with: journalctl -fu gufo",
       "type": "info"
     },

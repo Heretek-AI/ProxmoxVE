@@ -1,0 +1,68 @@
+{
+  "name": "Gufo",
+  "slug": "gufo",
+  "categories": [
+    20
+  ],
+  "date_created": "2026-10-26",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 8080,
+  "documentation": "https://github.com/gufo-org/gufo/blob/main/docs/SERVER.md",
+  "website": "https://github.com/gufo-org/gufo",
+  "logo": "https://raw.githubusercontent.com/gufo-org/gufo/main/assets/gufo-logo.jpg",
+  "config_path": "/opt/gufo/gufo.env",
+  "description": "Gufo is an open source local inference engine built and tuned for AMD Strix Halo (Ryzen AI MAX+ 395, Radeon 8060S gfx1151). It serves Qwen3.8, DeepSeek V4 Flash, speech, embedding, image and video models through an OpenAI-compatible API, with speculative decoding, concurrent requests and prompt caching. The script installs the official release build through Nix, using prebuilt ROCm from the Gufo binary cache.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/gufo.sh",
+      "resources": {
+        "cpu": 8,
+        "ram": 32768,
+        "hdd": 80,
+        "os": "debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "Gufo targets AMD Strix Halo (gfx1151) only. The container needs /dev/kfd and /dev/dri passed through, which the script sets up when GPU passthrough is enabled.",
+      "type": "warning"
+    },
+    {
+      "text": "The install runs the official Nix installer from nixos.org and asks before it does. Set var_external_installer=yes for unattended installs.",
+      "type": "info"
+    },
+    {
+      "text": "The first start downloads Qwen3.8 27B Q4_K_XL (about 17 GB). Follow it with: journalctl -fu gufo",
+      "type": "info"
+    },
+    {
+      "text": "The API requires a key, generated at install. Find it inside the container with: cat ~/gufo.creds. Clients send it as a Bearer token.",
+      "type": "info"
+    },
+    {
+      "text": "OpenAI-compatible API: http://<IP>:8080/v1",
+      "type": "info"
+    },
+    {
+      "text": "Change the model or server options in /opt/gufo/gufo.env, then run: systemctl restart gufo",
+      "type": "info"
+    },
+    {
+      "text": "Check the GPU from inside the container with: gufo diagnose",
+      "type": "info"
+    },
+    {
+      "text": "If a release is not in the Gufo binary cache yet, installing or updating compiles it locally and takes much longer.",
+      "type": "info"
+    }
+  ]
+}

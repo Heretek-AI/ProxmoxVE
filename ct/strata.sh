@@ -37,7 +37,11 @@ function update_script() {
     msg_ok "Stopped Service"
 
     msg_info "Updating ${APP} Terminal and engine to ${CHECK_UPDATE_RELEASE}"
-    $STD /root/.local/bin/strata update --wait 120
+    if ! $STD /root/.local/bin/strata update --wait 120; then
+      systemctl start --no-block strata
+      msg_error "strata update failed; the previous version is still installed and was started again"
+      exit 1
+    fi
     echo "${CHECK_UPDATE_RELEASE#v}" >"$HOME/.strata"
     msg_ok "Updated ${APP} Terminal and engine to ${CHECK_UPDATE_RELEASE}"
 

@@ -122,18 +122,17 @@ set -euo pipefail
 cd /opt/gsqhalo/models
 for url in $GSQHALO_MODEL_URLS ${GSQHALO_MTP_URL:-}; do
   file=$(basename "$url")
-  [[ -e "$file" ]] && continue
-  # A partial download from another URL can't be resumed.
+  # ${file}.url records where the file (or its partial download) came from.
   if [[ "$(cat "${file}.url" 2>/dev/null)" != "$url" ]]; then
-    rm -f "${file}.part"
+    rm -f "$file" "${file}.part"
     echo "$url" >"${file}.url"
   fi
+  [[ -e "$file" ]] && continue
   echo "Downloading ${url}"
   # A stalled transfer fails after 5 minutes; the service then retries and resumes.
   curl -fL --proto '=https' --tlsv1.2 --retry 5 --connect-timeout 30 --speed-limit 1024 --speed-time 300 \
     -C - -o "${file}.part" "$url"
   mv "${file}.part" "$file"
-  rm -f "${file}.url"
 done
 EOF2
 chmod +x /usr/local/bin/gsqhalo-model-fetch

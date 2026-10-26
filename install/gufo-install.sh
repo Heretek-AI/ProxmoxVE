@@ -26,7 +26,7 @@ confirm_external_installer "https://nixos.org/" "https://nixos.org/nix/install"
 
 msg_info "Installing Nix"
 NIX_INSTALLER=$(mktemp)
-curl -fsSL https://nixos.org/nix/install -o "$NIX_INSTALLER"
+curl -fsSL --connect-timeout 30 --max-time 300 https://nixos.org/nix/install -o "$NIX_INSTALLER"
 $STD sh "$NIX_INSTALLER" --daemon --yes
 rm -f "$NIX_INSTALLER"
 cat <<EOF >>/etc/nix/nix.conf
@@ -52,7 +52,11 @@ echo "${tag#v}" >"${HOME:-/root}/.gufo"
 EOF
 chmod +x /usr/local/bin/gufo-build
 
-RELEASE=$(curl -fsSL https://api.github.com/repos/gufo-org/gufo/releases/latest | jq -r '.tag_name')
+RELEASE=$(curl -fsSL --connect-timeout 30 --max-time 60 https://api.github.com/repos/gufo-org/gufo/releases/latest | jq -r '.tag_name')
+[[ -n "$RELEASE" && "$RELEASE" != "null" ]] || {
+  msg_error "Could not read the latest Gufo release"
+  exit 1
+}
 msg_info "Building Gufo ${RELEASE} (can take a while if not cached)"
 $STD /usr/local/bin/gufo-build "$RELEASE"
 msg_ok "Built Gufo ${RELEASE}"
@@ -85,9 +89,17 @@ cat <<'EOF' >/usr/local/bin/gufo-model-fetch
 set -euo pipefail
 [[ -e "$GUFO_MODEL" || -z "${GUFO_MODEL_URL:-}" ]] && exit 0
 mkdir -p "$(dirname "$GUFO_MODEL")"
+# A partial download from another URL can't be resumed.
+if [[ "$(cat "${GUFO_MODEL}.url" 2>/dev/null)" != "$GUFO_MODEL_URL" ]]; then
+  rm -f "${GUFO_MODEL}.part"
+  echo "$GUFO_MODEL_URL" >"${GUFO_MODEL}.url"
+fi
 echo "Downloading ${GUFO_MODEL_URL} to ${GUFO_MODEL}"
-curl -fL --retry 5 -C - -o "${GUFO_MODEL}.part" "$GUFO_MODEL_URL"
+# A stalled transfer fails after 5 minutes; the service then retries and resumes.
+curl -fL --retry 5 --connect-timeout 30 --speed-limit 1024 --speed-time 300 \
+  -C - -o "${GUFO_MODEL}.part" "$GUFO_MODEL_URL"
 mv "${GUFO_MODEL}.part" "$GUFO_MODEL"
+rm -f "${GUFO_MODEL}.url"
 EOF
 chmod +x /usr/local/bin/gufo-model-fetch
 msg_ok "Configured Gufo"

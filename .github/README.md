@@ -81,6 +81,7 @@ These scripts are exclusive to this forge, focusing on AI/ML workloads and speci
 | **[MCPHub](https://github.com/samanhappy/mcphub)** | Model Context Protocol Hub for AI tooling integration | 2 CPU / 2GB RAM |
 | **[SwarmUI](https://github.com/mcmonkeyprojects/SwarmUI)** | Stable Diffusion Swarm interface | 8 CPU / 16GB RAM + GPU |
 | **[LlamaCPP](https://github.com/ggml-org/llama.cpp)** | High-performance LLM inference engine with GPU acceleration | 4 CPU / 8GB RAM + GPU |
+| **[Gufo](https://github.com/gufo-org/gufo)** | Local inference engine tuned for AMD Strix Halo, OpenAI-compatible API | 8 CPU / 32GB RAM + Strix Halo GPU |
 | **[OpenClaw](https://github.com/openclaw/openclaw)** | AI-powered assistant and automation platform | 2 CPU / 4GB RAM |
 
 ### Media & Gaming

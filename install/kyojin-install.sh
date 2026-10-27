@@ -144,7 +144,8 @@ MODEL_DIR=/opt/kyojin/models
 PORT=8731
 # 131072 leaves about 14 GiB (Qwen) or 10 GiB (GLM) free on a 128 GB machine.
 CONTEXT=131072
-# Extra server flags, appended last, e.g. --default-reasoning-effort medium
+# Extra server flags, appended last. Quote values with spaces, e.g.
+# KYOJIN_EXTRA_ARGS="--default-reasoning-effort medium"
 KYOJIN_EXTRA_ARGS=
 EOF2
 

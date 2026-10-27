@@ -1,0 +1,64 @@
+{
+  "name": "Kyojin",
+  "slug": "kyojin",
+  "categories": [
+    20
+  ],
+  "date_created": "2026-10-27",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 8731,
+  "documentation": "https://github.com/Yamz-Labs/kyojin/blob/main/doc/container.md",
+  "website": "https://github.com/Yamz-Labs/kyojin",
+  "logo": "https://raw.githubusercontent.com/Yamz-Labs/kyojin/main/assets/yamz-banner.svg",
+  "config_path": "/opt/kyojin/kyojin.env",
+  "description": "Kyojin is Yamz Labs' open source inference engine for AMD Strix Halo (gfx1151), built on ExLlamaV3 with speculative decoding, serving their own EXL3 quantised builds of Qwen3.8-Flash-Next, GLM-5.3-Flash and MiMo-V2.6-Flash (95 to 106 GB) on one 128 GB machine through an OpenAI-compatible API. The script builds the latest tagged release with AMD's gfx1151 ROCm wheels, following Kyojin's own container recipe.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/kyojin.sh",
+      "resources": {
+        "cpu": 8,
+        "ram": 122880,
+        "hdd": 160,
+        "os": "ubuntu",
+        "version": "24.04"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "Kyojin needs a gfx1151 GPU (Ryzen AI Max+ 395, 128 GB). The container needs /dev/kfd and /dev/dri passed through, which the script sets up when GPU passthrough is enabled.",
+      "type": "warning"
+    },
+    {
+      "text": "The 100 GB-class packs need almost all of a 128 GB machine, so the container gets a 120 GB RAM limit by default. Lower it only for a smaller context or pack.",
+      "type": "warning"
+    },
+    {
+      "text": "The install downloads about 14 GB of ROCm wheels and builds the engine, which takes 15 to 30 minutes.",
+      "type": "info"
+    },
+    {
+      "text": "The first start downloads the Qwen3.8-Flash-Next pack (about 95 GB), then loads it. Follow it with: journalctl -fu kyojin",
+      "type": "info"
+    },
+    {
+      "text": "OpenAI-compatible API: http://<IP>:8731/v1. The server has no API key, so keep it on a trusted network.",
+      "type": "warning"
+    },
+    {
+      "text": "Change the model (qwen, glm or mimo), context or port in /opt/kyojin/kyojin.env, then run: systemctl restart kyojin",
+      "type": "info"
+    },
+    {
+      "text": "Check the GPU setup with: systemctl stop kyojin && kyojin-check",
+      "type": "info"
+    }
+  ]
+}

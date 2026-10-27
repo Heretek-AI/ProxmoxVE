@@ -9,7 +9,7 @@ source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_
 APP="Kyojin"
 var_tags="${var_tags:-ai;llm;inference;rocm}"
 var_cpu="${var_cpu:-8}"
-var_ram="${var_ram:-65536}"
+var_ram="${var_ram:-122880}"
 var_disk="${var_disk:-160}"
 var_os="${var_os:-ubuntu}"
 var_version="${var_version:-24.04}"

@@ -37,7 +37,8 @@ msg_ok "Installed Dependencies"
 mkdir -p /opt/kyojin/models
 cat <<'EOF2' >/usr/local/bin/kyojin-build
 #!/usr/bin/env bash
-# Builds a Kyojin tag (default: the newest vX.Y.Z) into /opt/kyojin/app.
+# Builds a Kyojin tag (default: the newest vX.Y.Z) into /opt/kyojin/releases
+# and points the /opt/kyojin/app symlink at it.
 # `kyojin-build --latest` only prints the newest tag.
 # Follows Kyojin's docker/Dockerfile: ROCm torch and rocm-sdk-devel from AMD's
 # gfx1151 nightly index at the versions that Dockerfile pins, requirements.txt,
@@ -46,7 +47,6 @@ set -euo pipefail
 REPO=https://github.com/Yamz-Labs/kyojin.git
 BASE=/opt/kyojin
 VENV=$BASE/venv
-NEW=$BASE/app.new
 
 latest() {
   git ls-remote --tags --refs "$REPO" 'v*' | awk -F/ '{print $3}' |
@@ -59,7 +59,11 @@ fi
 TAG=${1:-$(latest)}
 [[ -n "$TAG" ]] || { echo "Could not read the Kyojin tags" >&2; exit 1; }
 
-rm -rf "$NEW"
+exec 9>"$BASE/.build.lock"
+flock -n 9 || { echo "Another kyojin-build is running" >&2; exit 1; }
+
+mkdir -p "$BASE/releases"
+NEW="$BASE/releases/${TAG}-$(date +%Y%m%d%H%M%S)"
 git -c advice.detachedHead=false clone --depth 1 --branch "$TAG" "$REPO" "$NEW"
 
 pin() { sed -n "s/^ARG $1=//p" "$NEW/docker/Dockerfile" | head -n1; }
@@ -106,10 +110,14 @@ set +a
 )
 rm -rf "$NEW/build" "$NEW"/.rebuild.* "$NEW/.sdk-deps"
 
-rm -rf "$BASE/app.old"
-[[ -d "$BASE/app" ]] && mv "$BASE/app" "$BASE/app.old"
-mv "$NEW" "$BASE/app"
-rm -rf "$BASE/app.old"
+# Swap the symlink atomically. The previous release stays until the next
+# build, because the running server keeps reading it until it restarts.
+PREV=$(readlink -f "$BASE/app" 2>/dev/null || true)
+ln -sfn "$NEW" "$BASE/app.tmp"
+mv -Tf "$BASE/app.tmp" "$BASE/app"
+for dir in "$BASE"/releases/*; do
+  [[ "$dir" == "$NEW" || "$dir" == "$PREV" ]] || rm -rf "$dir"
+done
 echo "$TAG" >"${HOME:-/root}/.kyojin"
 EOF2
 chmod +x /usr/local/bin/kyojin-build

@@ -20,7 +20,7 @@
       "script": "ct/kyojin.sh",
       "resources": {
         "cpu": 8,
-        "ram": 65536,
+        "ram": 122880,
         "hdd": 160,
         "os": "ubuntu",
         "version": "24.04"
@@ -34,6 +34,10 @@
   "notes": [
     {
       "text": "Kyojin needs a gfx1151 GPU (Ryzen AI Max+ 395, 128 GB). The container needs /dev/kfd and /dev/dri passed through, which the script sets up when GPU passthrough is enabled.",
+      "type": "warning"
+    },
+    {
+      "text": "The 100 GB-class packs need almost all of a 128 GB machine, so the container gets a 120 GB RAM limit by default. Lower it only for a smaller context or pack.",
       "type": "warning"
     },
     {

@@ -28,10 +28,14 @@
     }
   ],
   "default_credentials": {
-    "username": null,
-    "password": null
+    "username": "admin",
+    "password": "See /home/hermes/.hermes/.env"
   },
   "notes": [
+    {
+      "text": "Access the Hermes Web Dashboard at http://<IP>:9119. Protected with HTTP basic auth (username: admin, generated password in /home/hermes/.hermes/.env).",
+      "type": "info"
+    },
     {
       "text": "Run 'hermes-setup' inside the container to configure your model provider and gateway server (choose 'user service' when prompted).",
       "type": "info"

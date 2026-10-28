@@ -50,16 +50,25 @@ function update_script() {
   systemctl stop hermes-dashboard
   msg_ok "Stopped Services"
 
+  local update_status=0
   msg_info "Updating Hermes Agent"
-  $STD setsid --wait bash -c '
+  if ! $STD setsid --wait bash -c '
     set -a; source /etc/default/hermes; set +a
     /home/hermes/.local/bin/hermes update --yes
-  '
+  '; then
+    update_status=$?
+    msg_warn "Hermes Agent update failed (exit code $update_status)"
+  fi
   mapfile -t root_gateway_pids < <(ps -eo user=,pid=,args= | awk '$1 == "root" && /\/home\/hermes\/\.hermes\// && /hermes_cli[.]main/ && / gateway run --replace$/ { print $2 }')
   if ((${#root_gateway_pids[@]})); then
     kill -TERM "${root_gateway_pids[@]}"
     for pid in "${root_gateway_pids[@]}"; do
+      deadline=$((SECONDS + 5))
       while kill -0 "$pid" 2>/dev/null; do
+        if ((SECONDS >= deadline)); then
+          kill -KILL "$pid" 2>/dev/null || true
+          break
+        fi
         sleep 0.1
       done
     done
@@ -81,6 +90,10 @@ function update_script() {
       su - hermes -c '/home/hermes/.local/bin/hermes gateway restart' 2>/dev/null || true
   fi
   msg_ok "Started Services"
+  if ((update_status != 0)); then
+    msg_error "Update failed with exit code $update_status"
+    exit "$update_status"
+  fi
   msg_ok "Updated successfully!"
   exit
 }
@@ -94,5 +107,13 @@ echo -e "${CREATING}${GN}Hermes Agent setup has been successfully initialized!${
 echo -e "${INFO}${YW} Configure your model provider and gateway server inside the container:${CL}"
 echo -e "${TAB}${BGN}hermes-setup${CL}"
 echo -e "${INFO} When prompted to install the gateway service, choose 'user service'.${CL}"
+DASHBOARD_PASS=$(pct exec "$CTID" -- awk -F'=' '$1=="HERMES_DASHBOARD_BASIC_AUTH_PASSWORD"{print $2}' /home/hermes/.hermes/.env 2>/dev/null || true)
+echo -e "${INFO}${YW} Access the Hermes Web Dashboard at:${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:9119${CL}"
+echo -e "${INFO}${YW} Dashboard Credentials (stored in /home/hermes/.hermes/.env):${CL}"
+echo -e "${TAB}${YW}Username: ${BGN}admin${CL}"
+if [[ -n "$DASHBOARD_PASS" ]]; then
+  echo -e "${TAB}${YW}Password: ${BGN}${DASHBOARD_PASS}${CL}"
+fi
 echo -e "${INFO}${YW} Key for Hermes API Server stored in:${CL}"
 echo -e "${TAB}${BGN}/home/hermes/.hermes/.env${CL}"

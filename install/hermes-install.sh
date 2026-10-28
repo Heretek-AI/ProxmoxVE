@@ -59,18 +59,21 @@ chmod 700 /home/hermes/.hermes
 git config --system --add safe.directory /home/hermes/.hermes/hermes-agent 2>/dev/null || true
 msg_ok "Installed Hermes Agent"
 
-msg_info "Configuring API Server"
+msg_info "Configuring API Server & Dashboard Auth"
 API_SERVER_KEY=$(random_password 32)
+DASHBOARD_PASSWORD=$(random_password 24)
 mkdir -p /home/hermes/.hermes
 cat <<EOF >/home/hermes/.hermes/.env
 API_SERVER_ENABLED=true
 API_SERVER_HOST=0.0.0.0
 API_SERVER_PORT=8642
 API_SERVER_KEY=${API_SERVER_KEY}
+HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
+HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${DASHBOARD_PASSWORD}
 EOF
 chown hermes:hermes /home/hermes/.hermes/.env
 chmod 600 /home/hermes/.hermes/.env
-msg_ok "Configured API Server"
+msg_ok "Configured API Server & Dashboard Auth"
 
 msg_info "Creating Dashboard Service"
 cat <<EOF >/etc/systemd/system/hermes-dashboard.service
@@ -85,8 +88,9 @@ User=hermes
 Group=hermes
 UMask=0077
 WorkingDirectory=/home/hermes
-ExecStart=/home/hermes/.local/bin/hermes dashboard --host 127.0.0.1 --port 9119 --no-open
+ExecStart=/home/hermes/.local/bin/hermes dashboard --host 0.0.0.0 --port 9119 --no-open
 EnvironmentFile=/etc/default/hermes
+EnvironmentFile=-/home/hermes/.hermes/.env
 Restart=on-failure
 RestartSec=5
 ProtectProc=invisible

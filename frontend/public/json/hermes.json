@@ -1,0 +1,52 @@
+{
+  "name": "Hermes Agent",
+  "slug": "hermes",
+  "categories": [
+    20
+  ],
+  "date_created": "2026-10-28",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 9119,
+  "documentation": "https://hermes-agent.nousresearch.com/docs/",
+  "website": "https://hermes-agent.nousresearch.com/",
+  "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/hermes-agent.webp",
+  "config_path": "/home/hermes/.hermes/.env",
+  "description": "Hermes Agent is a self-improving AI agent built by Nous Research with persistent memory, autonomous skill creation, computer-use (CUA) support, and multi-platform gateway integration. This enhanced Heretek build includes pre-configured passwordless sudo for the hermes user, native X11/input shared libraries for cua-driver, and Docker Engine with Buildx and Compose v2.",
+  "install_methods": [
+    {
+      "type": "ct",
+      "script": "ct/hermes.sh",
+      "resources": {
+        "cpu": 4,
+        "ram": 8192,
+        "hdd": 32,
+        "os": "debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": "admin",
+    "password": "See /home/hermes/.hermes/.env"
+  },
+  "notes": [
+    {
+      "text": "Access the Hermes Web Dashboard at http://<IP>:9119. Protected with HTTP basic auth (username: admin, generated password in /home/hermes/.hermes/.env).",
+      "type": "info"
+    },
+    {
+      "text": "Run 'hermes-setup' inside the container to configure your model provider and gateway server (choose 'user service' when prompted).",
+      "type": "info"
+    },
+    {
+      "text": "Includes Docker Engine, Buildx, Compose v2, passwordless sudo for the hermes user, and X11/input libraries required by cua-driver.",
+      "type": "info"
+    },
+    {
+      "text": "Key for Hermes API Server (port 8642) is stored in /home/hermes/.hermes/.env.",
+      "type": "info"
+    }
+  ]
+}

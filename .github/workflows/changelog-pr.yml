@@ -24,20 +24,20 @@ jobs:
     steps:
       - name: Generate a token
         id: generate-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
         with:
           app-id: ${{ vars.GHAPP_PR_ID }}
           private-key: ${{ secrets.GHAPP_PR_PRIVATE_KEY }}
 
       - name: Generate a token for PR approval and merge
         id: generate-token-merge
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
         with:
           app-id: ${{ vars.GHAPP_MERGEBOT_ID }}
           private-key: ${{ secrets.GHAPP_MERGEBOT_PRIVATE_KEY }}
 
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -58,7 +58,7 @@ jobs:
 
       - name: Get categorized pull requests
         id: get-categorized-prs
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             async function main() {
@@ -289,7 +289,7 @@ jobs:
             return await main();
 
       - name: Update CHANGELOG.md
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs').promises;
